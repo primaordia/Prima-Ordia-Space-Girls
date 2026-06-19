@@ -339,3 +339,102 @@ h1 {
     height: 48px;
   }
 }
+
+@media (orientation: landscape) and (max-height: 540px) {
+  .intro img {
+    width: 100vw;
+    height: 100dvh;
+    object-fit: contain;
+  }
+
+  .start-game {
+    bottom: max(10px, env(safe-area-inset-bottom));
+    min-width: 190px;
+    min-height: 42px;
+    font-size: 0.9rem;
+  }
+
+  .select {
+    align-items: start;
+    padding: 8px 12px;
+  }
+
+  .select__panel {
+    width: min(960px, 100%);
+    max-height: calc(100dvh - 16px);
+  }
+
+  .character-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .character-card {
+    min-height: 132px;
+    padding: 6px;
+    grid-template-rows: minmax(80px, 1fr) auto;
+  }
+
+  .character-card img {
+    max-height: 84px;
+  }
+
+  .character-card strong {
+    margin-top: 4px;
+    font-size: 0.72rem;
+  }
+
+  .character-card span {
+    font-size: 0.62rem;
+  }
+
+  .hud {
+    top: max(6px, env(safe-area-inset-top));
+    left: max(8px, env(safe-area-inset-left));
+    right: max(8px, env(safe-area-inset-right));
+  }
+
+  .hud > div {
+    padding: 6px 8px;
+  }
+
+  .hud span {
+    font-size: 0.8rem;
+  }
+
+  .hud small {
+    font-size: 0.62rem;
+  }
+
+  .hud__score {
+    min-width: 54px;
+  }
+
+  .announcement {
+    top: 43%;
+    width: min(440px, calc(100vw - 120px));
+    font-size: 0.78rem;
+  }
+
+  .reset {
+    right: max(8px, env(safe-area-inset-right));
+    bottom: calc(58px + env(safe-area-inset-bottom));
+    width: 36px;
+    height: 36px;
+    font-size: 1rem;
+  }
+
+  .touch-controls {
+    left: max(8px, env(safe-area-inset-left));
+    right: max(8px, env(safe-area-inset-right));
+    bottom: max(6px, env(safe-area-inset-bottom));
+    grid-template-columns: repeat(4, 40px);
+    gap: 8px;
+  }
+
+  .touch-controls button {
+    width: 40px;
+    height: 40px;
+    font-size: 1.1rem;
+  }
+}

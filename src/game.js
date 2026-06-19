@@ -27,6 +27,8 @@ const state = {
   images: new Map(),
   blocks: [],
   targets: [],
+  healingKits: [],
+  shields: [],
   stars: [],
   hazards: [],
   witches: [],
@@ -56,8 +58,8 @@ const world = {
   slingMaxLaunch: 5320,
   slingMaxVisibleRise: 0.88,
   launchAngleRadians: (30 * Math.PI) / 180,
-  jumpAngleRadians: (45 * Math.PI) / 180,
-  jumpBoostMultiplier: 2,
+  jumpAngleRadians: (50 * Math.PI) / 180,
+  jumpBoostMultiplier: 0.9,
   slingX: 180,
   slingY: 0
 };
@@ -71,7 +73,8 @@ function resize() {
   canvas.style.width = `${state.width}px`;
   canvas.style.height = `${state.height}px`;
   ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
-  world.groundY = Math.max(420, state.height - 112);
+  const isLandscapePhone = state.width > state.height && state.height <= 540;
+  world.groundY = isLandscapePhone ? state.height - 72 : Math.max(420, state.height - 112);
   world.slingY = world.groundY - 132;
   if (state.hero && !state.launched) {
     state.hero.x = world.slingX;
@@ -137,6 +140,7 @@ function chooseCharacter(character) {
     hp: 100,
     maxHp: 100,
     damageCooldown: 0,
+    shieldTimer: 0,
     grounded: false,
     facing: 1,
     animTime: Math.random() * Math.PI * 2,
@@ -155,6 +159,8 @@ function buildLevel(force = false) {
   if (state.blocks.length && !force) return;
   state.blocks = [];
   state.targets = [];
+  state.healingKits = [];
+  state.shields = [];
   state.stars = [];
   state.hazards = [];
   state.witches = [];
@@ -174,6 +180,16 @@ function buildLevel(force = false) {
     state.targets.push(target(x, world.groundY - 138));
   }
 
+  for (let x = 1250; x < world.width - 900; x += 1350) {
+    const yOffset = 82 + ((x / 1350) % 4) * 34;
+    state.healingKits.push(healingKit(x + 420, world.groundY - yOffset));
+  }
+
+  for (let x = 2850; x < world.width - 1600; x += 4300) {
+    const yOffset = 126 + ((x / 4300) % 2) * 58;
+    state.shields.push(shieldPickup(x + 260, world.groundY - yOffset));
+  }
+
   for (let x = 2600; x < world.width - 2200; x += 3400) {
     state.witches.push(witch(x, world.groundY - 150));
   }
@@ -190,6 +206,14 @@ function block(x, y, w, h, hp, color) {
 
 function target(x, y) {
   return { x, y, r: 28, alive: true, wobble: 0 };
+}
+
+function healingKit(x, y) {
+  return { x, y, w: 42, h: 34, alive: true, pulse: Math.random() * Math.PI * 2 };
+}
+
+function shieldPickup(x, y) {
+  return { x, y, r: 24, alive: true, pulse: Math.random() * Math.PI * 2 };
 }
 
 function spaceRock(x, y, r, damage, kind) {
@@ -227,6 +251,7 @@ function update(dt) {
   hero.jumpStretch = Math.max(0, hero.jumpStretch - dt * 5.4);
   hero.tapJumpCooldown = Math.max(0, hero.tapJumpCooldown - dt);
   hero.damageCooldown = Math.max(0, hero.damageCooldown - dt);
+  hero.shieldTimer = Math.max(0, hero.shieldTimer - dt);
   hero.specialFlash = Math.max(0, hero.specialFlash - dt);
   if (state.aiming) state.chargePower = getChargeRatio();
 
@@ -256,6 +281,8 @@ function update(dt) {
     if (!wasGrounded && hero.grounded) hero.landingBounce = 1;
     hitBlocks(hero);
     hitHealingFaces(hero);
+    collectHealingKits(hero);
+    collectShields(hero);
     collectStars(hero);
     hitHazards(hero, dt);
     updateWitches(dt);
@@ -323,6 +350,44 @@ function hitHealingFaces(hero) {
       healHero(15, "Smiley face restored 15 HP.");
       state.score += 50;
       burst(t.x, t.y, "#62ff8f", 18);
+      updateHud();
+    }
+  }
+}
+
+function collectHealingKits(hero) {
+  for (const kit of state.healingKits) {
+    if (!kit.alive) continue;
+    kit.pulse += 0.08;
+    if (rectsOverlap(
+      hero.x - hero.w / 2,
+      hero.y - hero.h / 2,
+      hero.w,
+      hero.h,
+      kit.x - kit.w / 2,
+      kit.y - kit.h / 2,
+      kit.w,
+      kit.h
+    )) {
+      kit.alive = false;
+      healHero(25, "Healing kit restored 25 HP.");
+      state.score += 35;
+      burst(kit.x, kit.y, "#62ff8f", 18);
+      updateHud();
+    }
+  }
+}
+
+function collectShields(hero) {
+  for (const shield of state.shields) {
+    if (!shield.alive) continue;
+    shield.pulse += 0.08;
+    if (Math.hypot(hero.x - shield.x, hero.y - shield.y) < shield.r + hero.w * 0.45) {
+      shield.alive = false;
+      hero.shieldTimer = 4;
+      hero.specialFlash = Math.max(hero.specialFlash, 0.45);
+      announce("Shield active: damage blocked for 4 seconds.");
+      burst(shield.x, shield.y, "#62ff8f", 22);
       updateHud();
     }
   }
@@ -424,6 +489,13 @@ function updatePhenomena(dt) {
 function damageHero(amount, message) {
   const hero = state.hero;
   if (!hero || hero.damageCooldown > 0 || state.gameOver || state.won) return;
+  if (hero.shieldTimer > 0) {
+    hero.damageCooldown = 0.25;
+    hero.specialFlash = Math.max(hero.specialFlash, 0.25);
+    announce("Shield blocked the damage.");
+    burst(hero.x, hero.y, "#62ff8f", 12);
+    return;
+  }
   hero.hp = clamp(hero.hp - amount, 0, hero.maxHp);
   hero.damageCooldown = 0.55;
   hero.specialFlash = 0.35;
@@ -530,7 +602,8 @@ function burst(x, y, color, count) {
 function updateHud() {
   if (!state.selected) return;
   heroName.textContent = `${state.selected.name}, ${state.selected.title}`;
-  heroPower.textContent = state.gameOver ? "Hero down" : state.won ? "Docked" : `${state.selected.special.name} | HP ${Math.round(state.hero.hp)}`;
+  const shieldText = state.hero.shieldTimer > 0 ? ` | Shield ${state.hero.shieldTimer.toFixed(1)}s` : "";
+  heroPower.textContent = state.gameOver ? "Hero down" : state.won ? "Docked" : `${state.selected.special.name} | HP ${Math.round(state.hero.hp)}${shieldText}`;
   scoreEl.textContent = state.score;
 }
 
@@ -543,7 +616,7 @@ function announce(message) {
 function updateAnnouncement() {
   if (!announcement) return;
   if (state.messageTimer <= 0 && state.selected && !state.won && !state.gameOver) {
-    state.message = "Reach the far space station. Smiley faces heal, rocks and cosmic hazards hurt.";
+    state.message = "Reach the far space station. Green kits heal, shields block damage, rocks and cosmic hazards hurt.";
   }
   announcement.textContent = state.message;
 }
@@ -590,6 +663,8 @@ function drawWorld() {
   drawSlingshot();
   drawFinishStation();
   for (const s of state.stars) if (s.alive) drawStar(s.x, s.y, s.r, s.spin);
+  for (const kit of state.healingKits) if (kit.alive) drawHealingKit(kit);
+  for (const shield of state.shields) if (shield.alive) drawShieldPickup(shield);
   for (const h of state.hazards) drawSpaceRock(h);
   for (const t of state.targets) if (t.alive) drawTarget(t);
   for (const w of state.witches) if (w.alive) drawWitch(w);
@@ -705,7 +780,7 @@ function drawHero() {
   const hero = state.hero;
   const img = state.images.get(state.selected.id);
   const ratio = img.width / img.height;
-  const drawH = hero.h * 1.82;
+  const drawH = hero.h * 1.22;
   const drawW = drawH * ratio;
   const speedLean = clamp(hero.vx / 1400, -0.18, 0.18);
   const flightLean = state.launched && !hero.grounded ? clamp(-hero.vy / 4200, -0.08, 0.08) : 0;
@@ -715,7 +790,7 @@ function drawHero() {
   const squash = hero.landingBounce;
   const scaleX = 1 + squash * 0.1 - stretch * 0.045 + Math.abs(speedLean) * 0.08;
   const scaleY = 1 - squash * 0.085 + stretch * 0.13 + airFlutter;
-  const shadowWidth = hero.w * (hero.grounded ? 1.15 + squash * 0.25 : 0.72);
+  const shadowWidth = hero.w * 0.72 * (hero.grounded ? 1.15 + squash * 0.25 : 0.72);
   const shadowAlpha = hero.grounded ? 0.32 : 0.13;
 
   ctx.save();
@@ -730,6 +805,18 @@ function drawHero() {
   ctx.rotate((speedLean + flightLean) * hero.facing);
   if (hero.facing < 0) ctx.scale(-1, 1);
   ctx.scale(scaleX, scaleY);
+  if (hero.shieldTimer > 0) {
+    ctx.save();
+    ctx.globalAlpha = 0.28 + Math.sin(hero.animTime * 10) * 0.08;
+    ctx.strokeStyle = "#62ff8f";
+    ctx.lineWidth = 5;
+    ctx.shadowColor = "#62ff8f";
+    ctx.shadowBlur = 18;
+    ctx.beginPath();
+    ctx.ellipse(0, 2, drawW * 0.42, drawH * 0.47, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
   if (hero.specialFlash > 0) {
     ctx.shadowColor = "#fff1a8";
     ctx.shadowBlur = 22 + hero.specialFlash * 22;
@@ -741,7 +828,7 @@ function drawHero() {
     ctx.strokeStyle = "#fff1a8";
     ctx.lineWidth = 4;
     ctx.beginPath();
-    ctx.arc(0, 0, Math.max(hero.w, hero.h) * (0.72 + hero.specialFlash * 0.18), 0, Math.PI * 2);
+    ctx.arc(0, 0, Math.max(hero.w, hero.h) * (0.48 + hero.specialFlash * 0.12), 0, Math.PI * 2);
     ctx.stroke();
   }
   ctx.restore();
@@ -915,6 +1002,65 @@ function drawTarget(t) {
   ctx.lineWidth = 3;
   ctx.beginPath();
   ctx.arc(0, 6, 10, 0, Math.PI);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawHealingKit(kit) {
+  kit.pulse += 0.035;
+  const glow = 12 + Math.sin(kit.pulse) * 5;
+  ctx.save();
+  ctx.translate(kit.x, kit.y + Math.sin(kit.pulse * 1.4) * 4);
+  ctx.shadowColor = "#62ff8f";
+  ctx.shadowBlur = glow;
+  ctx.fillStyle = "rgba(20, 80, 46, 0.96)";
+  ctx.strokeStyle = "#62ff8f";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.roundRect(-kit.w / 2, -kit.h / 2, kit.w, kit.h, 6);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = "#b8ffd0";
+  ctx.fillRect(-5, -13, 10, 26);
+  ctx.fillRect(-14, -4, 28, 8);
+
+  ctx.strokeStyle = "rgba(184, 255, 208, 0.55)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(-kit.w / 2 + 5, -kit.h / 2 + 5, kit.w - 10, kit.h - 10);
+  ctx.restore();
+}
+
+function drawShieldPickup(shield) {
+  shield.pulse += 0.035;
+  const bob = Math.sin(shield.pulse * 1.5) * 5;
+  const glow = 16 + Math.sin(shield.pulse) * 6;
+  ctx.save();
+  ctx.translate(shield.x, shield.y + bob);
+  ctx.shadowColor = "#62ff8f";
+  ctx.shadowBlur = glow;
+  ctx.strokeStyle = "#62ff8f";
+  ctx.fillStyle = "rgba(20, 92, 52, 0.82)";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(0, -shield.r);
+  ctx.quadraticCurveTo(shield.r * 0.88, -shield.r * 0.68, shield.r * 0.72, 4);
+  ctx.quadraticCurveTo(shield.r * 0.42, shield.r * 0.82, 0, shield.r);
+  ctx.quadraticCurveTo(-shield.r * 0.42, shield.r * 0.82, -shield.r * 0.72, 4);
+  ctx.quadraticCurveTo(-shield.r * 0.88, -shield.r * 0.68, 0, -shield.r);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "rgba(184, 255, 208, 0.8)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, -shield.r * 0.58);
+  ctx.lineTo(0, shield.r * 0.55);
+  ctx.moveTo(-shield.r * 0.38, -shield.r * 0.05);
+  ctx.lineTo(shield.r * 0.38, -shield.r * 0.05);
   ctx.stroke();
   ctx.restore();
 }
