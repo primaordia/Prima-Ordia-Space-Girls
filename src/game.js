@@ -31,9 +31,8 @@ const state = {
   shields: [],
   stars: [],
   hazards: [],
-  witches: [],
-  fireballs: [],
   phenomena: [],
+  backgroundStars: [],
   particles: [],
   launched: false,
   aiming: false,
@@ -59,7 +58,7 @@ const world = {
   slingMaxVisibleRise: 0.88,
   launchAngleRadians: (30 * Math.PI) / 180,
   jumpAngleRadians: (50 * Math.PI) / 180,
-  jumpBoostMultiplier: 0.9,
+  jumpBoostMultiplier: 0.675,
   slingX: 180,
   slingY: 0
 };
@@ -129,7 +128,6 @@ function chooseCharacter(character) {
   state.cooldown = 0;
   state.cameraX = 0;
   state.particles = [];
-  state.fireballs = [];
   state.hero = {
     x: world.slingX,
     y: world.slingY,
@@ -139,6 +137,8 @@ function chooseCharacter(character) {
     h: character.physics.height,
     hp: 100,
     maxHp: 100,
+    healingOverTime: 0,
+    healingTimeLeft: 0,
     damageCooldown: 0,
     shieldTimer: 0,
     grounded: false,
@@ -163,17 +163,15 @@ function buildLevel(force = false) {
   state.shields = [];
   state.stars = [];
   state.hazards = [];
-  state.witches = [];
-  state.fireballs = [];
   state.phenomena = [];
+  state.backgroundStars = [];
+
+  for (let i = 0; i < 900; i += 1) {
+    state.backgroundStars.push(backgroundStar(i));
+  }
 
   for (let x = 820; x < world.width - 1000; x += 720) {
     state.stars.push(star(x, world.groundY - 150 - (x % 3) * 34));
-  }
-
-  for (let x = 1350; x < world.width - 900; x += 1150) {
-    state.hazards.push(spaceRock(x, world.groundY - 30, 36 + (x % 4) * 5, 10, "rock"));
-    state.hazards.push(spaceRock(x + 390, world.groundY - 52, 28 + (x % 5) * 4, 10, "asteroid"));
   }
 
   for (let x = 2050; x < world.width - 1400; x += 3100) {
@@ -188,10 +186,6 @@ function buildLevel(force = false) {
   for (let x = 2850; x < world.width - 1600; x += 4300) {
     const yOffset = 126 + ((x / 4300) % 2) * 58;
     state.shields.push(shieldPickup(x + 260, world.groundY - yOffset));
-  }
-
-  for (let x = 2600; x < world.width - 2200; x += 3400) {
-    state.witches.push(witch(x, world.groundY - 150));
   }
 
   for (let x = 3800; x < world.width - 1800; x += 2700) {
@@ -220,16 +214,27 @@ function spaceRock(x, y, r, damage, kind) {
   return { x, y, r, damage, kind, spin: Math.random() * Math.PI * 2, cooldown: 0 };
 }
 
-function witch(x, y) {
-  return { x, y, r: 30, cooldown: 0.8 + Math.random() * 1.4, alive: true, bob: Math.random() * Math.PI * 2 };
-}
-
 function phenomenon(x, y, vx, vy, r, damage, kind) {
   return { x, y, originX: x, originY: y, vx, vy, r, damage, kind, spin: Math.random() * Math.PI * 2, cooldown: 0 };
 }
 
 function star(x, y) {
   return { x, y, r: 15, alive: true, spin: Math.random() * 6 };
+}
+
+function backgroundStar(i) {
+  const x = (fract(Math.sin(i * 91.73) * 43758.5453) * world.width);
+  const yBand = Math.max(120, world.groundY - 80);
+  const y = 18 + fract(Math.sin(i * 47.19 + 3.4) * 12937.831) * yBand;
+  const size = 0.8 + fract(Math.sin(i * 13.91 + 9.7) * 9371.42) * 2.2;
+  const twinkle = 0.7 + fract(Math.sin(i * 31.13 + 1.2) * 7131.17) * 2.4;
+  const phase = fract(Math.sin(i * 67.77) * 3133.7) * Math.PI * 2;
+  const layer = 0.08 + fract(Math.sin(i * 19.83) * 2719.1) * 0.22;
+  return { x, y, size, twinkle, phase, layer };
+}
+
+function fract(value) {
+  return value - Math.floor(value);
 }
 
 function tick(now) {
@@ -252,6 +257,7 @@ function update(dt) {
   hero.tapJumpCooldown = Math.max(0, hero.tapJumpCooldown - dt);
   hero.damageCooldown = Math.max(0, hero.damageCooldown - dt);
   hero.shieldTimer = Math.max(0, hero.shieldTimer - dt);
+  updateHealingOverTime(hero, dt);
   hero.specialFlash = Math.max(0, hero.specialFlash - dt);
   if (state.aiming) state.chargePower = getChargeRatio();
 
@@ -285,8 +291,6 @@ function update(dt) {
     collectShields(hero);
     collectStars(hero);
     hitHazards(hero, dt);
-    updateWitches(dt);
-    updateFireballs(dt);
     updatePhenomena(dt);
     checkFinish(hero);
   }
@@ -370,7 +374,7 @@ function collectHealingKits(hero) {
       kit.h
     )) {
       kit.alive = false;
-      healHero(25, "Healing kit restored 25 HP.");
+      startHealingOverTime(10, 5, "Medikit healing: 10 HP over 5 seconds.");
       state.score += 35;
       burst(kit.x, kit.y, "#62ff8f", 18);
       updateHud();
@@ -429,45 +433,6 @@ function hitHazards(hero, dt) {
   }
 }
 
-function updateWitches(dt) {
-  for (const w of state.witches) {
-    if (!w.alive) continue;
-    w.bob += dt * 2.5;
-    w.cooldown -= dt;
-    const inRange = Math.abs(state.hero.x - w.x) < 760 && Math.abs(state.hero.y - w.y) < 420;
-    if (w.cooldown <= 0 && inRange) {
-      const dx = state.hero.x - w.x;
-      const dy = state.hero.y - w.y;
-      const len = Math.max(1, Math.hypot(dx, dy));
-      state.fireballs.push({
-        x: w.x,
-        y: w.y + Math.sin(w.bob) * 12,
-        vx: (dx / len) * 360,
-        vy: (dy / len) * 360,
-        r: 12,
-        damage: 5,
-        life: 4
-      });
-      w.cooldown = 1.7;
-      announce("Space witch fired a fireball.");
-    }
-  }
-}
-
-function updateFireballs(dt) {
-  for (const f of state.fireballs) {
-    f.life -= dt;
-    f.x += f.vx * dt;
-    f.y += f.vy * dt;
-    if (Math.hypot(state.hero.x - f.x, state.hero.y - f.y) < f.r + state.hero.w * 0.38) {
-      f.life = 0;
-      damageHero(f.damage, `Fireball hit: -${f.damage} HP.`);
-      burst(f.x, f.y, "#ff7137", 12);
-    }
-  }
-  state.fireballs = state.fireballs.filter((f) => f.life > 0);
-}
-
 function updatePhenomena(dt) {
   for (const p of state.phenomena) {
     p.x += p.vx * dt;
@@ -514,6 +479,22 @@ function healHero(amount, message) {
   announce(message);
 }
 
+function startHealingOverTime(amount, seconds, message) {
+  const hero = state.hero;
+  hero.healingOverTime += amount;
+  hero.healingTimeLeft = Math.max(hero.healingTimeLeft, seconds);
+  announce(message);
+}
+
+function updateHealingOverTime(hero, dt) {
+  if (hero.healingOverTime <= 0 || hero.healingTimeLeft <= 0 || hero.hp >= hero.maxHp) return;
+  const tickHeal = Math.min(hero.healingOverTime, (10 / 5) * dt);
+  hero.hp = clamp(hero.hp + tickHeal, 0, hero.maxHp);
+  hero.healingOverTime -= tickHeal;
+  hero.healingTimeLeft = Math.max(0, hero.healingTimeLeft - dt);
+  updateHud();
+}
+
 function checkFinish(hero) {
   if (hero.x > world.width - 520) {
     state.won = true;
@@ -526,6 +507,7 @@ function checkFinish(hero) {
 
 function useSpecial() {
   const hero = state.hero;
+  if (!state.selected.special) return;
   state.cooldown = 1.6;
   hero.specialFlash = 0.45;
   const type = state.selected.special.type;
@@ -547,14 +529,6 @@ function useSpecial() {
     hero.vx += hero.facing * 330;
     hero.vy = Math.min(hero.vy, -130);
     burst(hero.x, hero.y, "#66dfff", 18);
-  } else if (type === "gem_magnet") {
-    for (const s of state.stars) {
-      if (s.alive && Math.hypot(hero.x - s.x, hero.y - s.y) < 260) {
-        s.x += (hero.x - s.x) * 0.6;
-        s.y += (hero.y - s.y) * 0.6;
-      }
-    }
-    burst(hero.x, hero.y, "#ffe458", 18);
   } else {
     hero.vy -= 260;
     burst(hero.x, hero.y, "#ffc3ea", 18);
@@ -601,10 +575,27 @@ function burst(x, y, color, count) {
 
 function updateHud() {
   if (!state.selected) return;
+  const level = getLevelProgress(state.score);
   heroName.textContent = `${state.selected.name}, ${state.selected.title}`;
   const shieldText = state.hero.shieldTimer > 0 ? ` | Shield ${state.hero.shieldTimer.toFixed(1)}s` : "";
-  heroPower.textContent = state.gameOver ? "Hero down" : state.won ? "Docked" : `${state.selected.special.name} | HP ${Math.round(state.hero.hp)}${shieldText}`;
+  heroPower.textContent = state.gameOver
+    ? "Hero down"
+    : state.won
+      ? "Docked"
+      : `Level ${level.level} | XP ${level.current}/${level.next} | HP ${Math.round(state.hero.hp)}${shieldText}`;
   scoreEl.textContent = state.score;
+}
+
+function getLevelProgress(score) {
+  let totalXp = Math.floor(score / 3);
+  let level = 1;
+  let next = 100;
+  while (totalXp >= next) {
+    totalXp -= next;
+    level += 1;
+    next = Math.ceil(next * 1.25);
+  }
+  return { level, current: totalXp, next };
 }
 
 function announce(message) {
@@ -616,7 +607,7 @@ function announce(message) {
 function updateAnnouncement() {
   if (!announcement) return;
   if (state.messageTimer <= 0 && state.selected && !state.won && !state.gameOver) {
-    state.message = "Reach the far space station. Green kits heal, shields block damage, rocks and cosmic hazards hurt.";
+    state.message = "Reach the far space station. Green kits heal, shields block damage, and cosmic hazards hurt.";
   }
   announcement.textContent = state.message;
 }
@@ -642,18 +633,35 @@ function draw() {
 }
 
 function drawSky() {
+  const time = performance.now() / 1000;
   const gradient = ctx.createLinearGradient(0, 0, 0, state.height);
   gradient.addColorStop(0, "#090a24");
   gradient.addColorStop(0.55, "#171547");
   gradient.addColorStop(1, "#29123b");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, state.width, state.height);
-  ctx.fillStyle = "rgba(255,255,255,0.8)";
-  for (let i = 0; i < 90; i += 1) {
-    const x = (i * 137.5 - state.cameraX * (0.1 + (i % 4) * 0.035)) % (state.width + 80);
-    const y = 30 + ((i * 83) % Math.max(220, state.height - 260));
-    ctx.globalAlpha = 0.28 + (i % 5) * 0.13;
-    ctx.fillRect(x, y, 2, 2);
+
+  const stars = state.backgroundStars.length ? state.backgroundStars : Array.from({ length: 160 }, (_, i) => backgroundStar(i));
+  for (const starDot of stars) {
+    const wrappedX = ((starDot.x - state.cameraX * starDot.layer) % (world.width + state.width) + world.width + state.width) % (world.width + state.width);
+    const x = wrappedX - state.cameraX * 0.02;
+    if (x < -12 || x > state.width + 12) continue;
+    const pulse = 0.46 + Math.sin(time * starDot.twinkle + starDot.phase) * 0.34;
+    ctx.globalAlpha = clamp(pulse, 0.14, 0.9);
+    ctx.fillStyle = starDot.size > 2.2 ? "#fff1a8" : "#ffffff";
+    ctx.beginPath();
+    ctx.arc(x, starDot.y, starDot.size, 0, Math.PI * 2);
+    ctx.fill();
+    if (starDot.size > 1.8 && pulse > 0.58) {
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.7)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x - starDot.size * 2.6, starDot.y);
+      ctx.lineTo(x + starDot.size * 2.6, starDot.y);
+      ctx.moveTo(x, starDot.y - starDot.size * 2.6);
+      ctx.lineTo(x, starDot.y + starDot.size * 2.6);
+      ctx.stroke();
+    }
   }
   ctx.globalAlpha = 1;
 }
@@ -665,10 +673,7 @@ function drawWorld() {
   for (const s of state.stars) if (s.alive) drawStar(s.x, s.y, s.r, s.spin);
   for (const kit of state.healingKits) if (kit.alive) drawHealingKit(kit);
   for (const shield of state.shields) if (shield.alive) drawShieldPickup(shield);
-  for (const h of state.hazards) drawSpaceRock(h);
   for (const t of state.targets) if (t.alive) drawTarget(t);
-  for (const w of state.witches) if (w.alive) drawWitch(w);
-  for (const f of state.fireballs) drawFireball(f);
   for (const p of state.phenomena) drawPhenomenon(p);
   for (const b of state.blocks) if (b.alive) drawBlock(b);
   for (const p of state.particles) {
@@ -684,22 +689,8 @@ function drawWorld() {
 function drawPlatforms() {
   ctx.fillStyle = "#171b31";
   ctx.fillRect(-200, world.groundY, world.width + 400, 220);
-  ctx.fillStyle = "#2c3050";
-  for (let x = -120; x < world.width + 220; x += 88) {
-    ctx.beginPath();
-    ctx.moveTo(x, world.groundY);
-    ctx.lineTo(x + 74, world.groundY);
-    ctx.lineTo(x + 52, world.groundY + 28);
-    ctx.lineTo(x - 20, world.groundY + 28);
-    ctx.closePath();
-    ctx.fill();
-  }
-  for (let x = 720; x < world.width - 900; x += 1650) {
-    drawRamp(x, world.groundY, 250 + (x % 2) * 80, 92 + (x % 3) * 26);
-  }
-  for (let x = 1320; x < world.width - 1200; x += 2200) {
-    drawCrystalField(x, world.groundY);
-  }
+  ctx.fillStyle = "rgba(120, 228, 255, 0.16)";
+  ctx.fillRect(-200, world.groundY, world.width + 400, 4);
 }
 
 function drawCrystalField(x, y) {
@@ -853,66 +844,6 @@ function drawHealthBar(hero) {
   ctx.restore();
 }
 
-function drawSpaceRock(h) {
-  ctx.save();
-  ctx.translate(h.x, h.y);
-  ctx.rotate(h.spin);
-  ctx.fillStyle = h.kind === "asteroid" ? "#7f879a" : "#635f70";
-  ctx.strokeStyle = "#c3d1e7";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  for (let i = 0; i < 9; i += 1) {
-    const a = (i / 9) * Math.PI * 2;
-    const r = h.r * (0.72 + ((i * 37) % 29) / 100);
-    ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
-  }
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-  ctx.restore();
-}
-
-function drawWitch(w) {
-  const y = w.y + Math.sin(w.bob) * 12;
-  ctx.save();
-  ctx.translate(w.x, y);
-  ctx.fillStyle = "#251133";
-  ctx.beginPath();
-  ctx.arc(0, 0, w.r, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "#b05cff";
-  ctx.beginPath();
-  ctx.moveTo(-28, -18);
-  ctx.lineTo(0, -66);
-  ctx.lineTo(28, -18);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = "#ffde7a";
-  ctx.beginPath();
-  ctx.arc(-9, -3, 4, 0, Math.PI * 2);
-  ctx.arc(9, -3, 4, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = "#ff6f37";
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.moveTo(-42, 18);
-  ctx.lineTo(42, 18);
-  ctx.stroke();
-  ctx.restore();
-}
-
-function drawFireball(f) {
-  ctx.save();
-  ctx.translate(f.x, f.y);
-  ctx.fillStyle = "#ff7137";
-  ctx.shadowColor = "#ffb347";
-  ctx.shadowBlur = 16;
-  ctx.beginPath();
-  ctx.arc(0, 0, f.r, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-}
-
 function drawPhenomenon(p) {
   ctx.save();
   ctx.translate(p.x, p.y);
@@ -989,10 +920,16 @@ function drawTarget(t) {
   t.wobble += 0.04;
   ctx.save();
   ctx.translate(t.x, t.y + Math.sin(t.wobble) * 5);
+  ctx.shadowColor = "#ff71d9";
+  ctx.shadowBlur = 18 + Math.sin(t.wobble * 2) * 5;
   ctx.fillStyle = "#ff6f87";
   ctx.beginPath();
   ctx.arc(0, 0, t.r, 0, Math.PI * 2);
   ctx.fill();
+  ctx.strokeStyle = "#ff71d9";
+  ctx.lineWidth = 4;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
   ctx.fillStyle = "#22122d";
   ctx.beginPath();
   ctx.arc(-9, -5, 5, 0, Math.PI * 2);
@@ -1204,7 +1141,6 @@ document.querySelector("#backBtn").addEventListener("click", () => {
   state.won = false;
   state.gameOver = false;
   state.cameraX = 0;
-  state.fireballs = [];
   state.particles = [];
   held.left = false;
   held.right = false;
