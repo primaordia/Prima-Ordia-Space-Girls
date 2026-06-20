@@ -26,6 +26,7 @@ const tapMove = { active: false, x: 0, y: 0 };
 
 const GAME_ASSETS = {
   fireball: "assets/game/fireball.png",
+  shield: "assets/game/shield.png",
   fireballs: {
     purple: "assets/game/fireball_purple.png",
     red: "assets/game/fireball_red.png",
@@ -167,6 +168,7 @@ async function boot() {
 async function loadGameAssets() {
   const entries = [
     ["fireball", GAME_ASSETS.fireball],
+    ["shield", GAME_ASSETS.shield],
     ["fireball_purple", GAME_ASSETS.fireballs.purple],
     ["fireball_red", GAME_ASSETS.fireballs.red],
     ["fireball_green", GAME_ASSETS.fireballs.green],
@@ -489,7 +491,7 @@ function healingKit(x, y) {
 }
 
 function shieldPickup(x, y) {
-  return { x, y, r: 24, alive: true, pulse: Math.random() * Math.PI * 2 };
+  return { x, y, r: 27, w: 54, h: 54, alive: true, pulse: Math.random() * Math.PI * 2 };
 }
 
 function spaceRock(x, y, r, damage, kind) {
@@ -700,9 +702,9 @@ function collectShields(hero) {
     shield.pulse += 0.08;
     if (Math.hypot(hero.x - shield.x, hero.y - shield.y) < shield.r + hero.w * 0.45) {
       shield.alive = false;
-      hero.shieldTimer = 4;
+      hero.shieldTimer = 5;
       hero.specialFlash = Math.max(hero.specialFlash, 0.45);
-      announce("Shield active: damage blocked for 4 seconds.");
+      announce("Shield active: damage blocked for 5 seconds.");
       burst(shield.x, shield.y, "#62ff8f", 22);
       updateHud();
     }
@@ -814,8 +816,8 @@ function updateFireballs(dt) {
       f.h
     )) {
       f.alive = false;
-      const damage = getEnemyDamage(25);
-      startDamageOverTime(damage, 5, `Fireball burn: ${Math.round(damage)} HP damage over 5 seconds.`);
+      const damage = getEnemyDamage(36);
+      startDamageOverTime(damage, 6, `Fireball burn: ${Math.round(damage)} HP damage over 6 seconds.`);
       burst(f.x, f.y, getFireballColor(f.color), 18);
     }
   }
@@ -1557,33 +1559,15 @@ function drawHealingKit(kit) {
 function drawShieldPickup(shield) {
   shield.pulse += 0.035;
   const bob = Math.sin(shield.pulse * 1.5) * 5;
-  const glow = 16 + Math.sin(shield.pulse) * 6;
+  const glow = 14 + Math.sin(shield.pulse) * 5;
+  const image = state.images.get("shield");
   ctx.save();
   ctx.translate(shield.x, shield.y + bob);
-  ctx.shadowColor = "#62ff8f";
+  ctx.shadowColor = "#ffe36b";
   ctx.shadowBlur = glow;
-  ctx.strokeStyle = "#62ff8f";
-  ctx.fillStyle = "rgba(20, 92, 52, 0.82)";
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.moveTo(0, -shield.r);
-  ctx.quadraticCurveTo(shield.r * 0.88, -shield.r * 0.68, shield.r * 0.72, 4);
-  ctx.quadraticCurveTo(shield.r * 0.42, shield.r * 0.82, 0, shield.r);
-  ctx.quadraticCurveTo(-shield.r * 0.42, shield.r * 0.82, -shield.r * 0.72, 4);
-  ctx.quadraticCurveTo(-shield.r * 0.88, -shield.r * 0.68, 0, -shield.r);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.shadowBlur = 0;
-  ctx.strokeStyle = "rgba(184, 255, 208, 0.8)";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(0, -shield.r * 0.58);
-  ctx.lineTo(0, shield.r * 0.55);
-  ctx.moveTo(-shield.r * 0.38, -shield.r * 0.05);
-  ctx.lineTo(shield.r * 0.38, -shield.r * 0.05);
-  ctx.stroke();
+  if (image) {
+    ctx.drawImage(image, -shield.w / 2, -shield.h / 2, shield.w, shield.h);
+  }
   ctx.restore();
 }
 
