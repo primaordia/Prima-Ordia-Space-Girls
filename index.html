@@ -40,13 +40,24 @@
       <div id="announcement" class="announcement" role="status">Click and hold at the launch station to charge.</div>
 
       <nav class="touch-controls" aria-label="Touch controls">
-        <button id="leftBtn" type="button" aria-label="Move left">‹</button>
-        <button id="jumpBtn" type="button" aria-label="Jump">↑</button>
-        <button id="rightBtn" type="button" aria-label="Move right">›</button>
-        <button id="backBtn" type="button" aria-label="Back to character select">↩</button>
+        <button id="leftBtn" class="move-control" type="button" aria-label="Move left">
+          <span class="control-icon">‹</span>
+          <span class="control-label">Left</span>
+        </button>
+        <button id="jumpBtn" class="jump-control" type="button" aria-label="Jump">
+          <span class="control-icon">▲</span>
+          <span class="control-label">Jump</span>
+        </button>
+        <button id="rightBtn" class="move-control" type="button" aria-label="Move right">
+          <span class="control-label">Right</span>
+          <span class="control-icon">›</span>
+        </button>
+        <button id="backBtn" class="restart-control" type="button" aria-label="Restart and choose character">
+          <span class="control-icon">☰</span>
+          <span class="control-label">Restart</span>
+        </button>
       </nav>
 
-      <button id="resetBtn" class="reset" type="button" aria-label="Reset level">↻</button>
       <audio id="music" src="assets/audio/backgroundmusic1.mp3" preload="auto" loop></audio>
     </main>
     <script src="src/characters.js"></script>

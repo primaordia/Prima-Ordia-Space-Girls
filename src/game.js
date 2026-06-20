@@ -5,7 +5,6 @@ const grid = document.querySelector("#characterGrid");
 const heroName = document.querySelector("#heroName");
 const heroPower = document.querySelector("#heroPower");
 const scoreEl = document.querySelector("#score");
-const resetBtn = document.querySelector("#resetBtn");
 const preIntro = document.querySelector("#preIntro");
 const intro = document.querySelector("#intro");
 const enterIntroBtn = document.querySelector("#enterIntroBtn");
@@ -1162,16 +1161,6 @@ startGameBtn.addEventListener("click", () => {
   select.classList.remove("is-hidden");
   startMusic();
   announce("Choose your hero.");
-});
-
-resetBtn.addEventListener("click", () => {
-  if (state.selected) {
-    chooseCharacter(state.selected);
-  } else {
-    intro.classList.add("is-hidden");
-    preIntro.classList.add("is-hidden");
-    select.classList.remove("is-hidden");
-  }
 });
 
 boot().catch((error) => {

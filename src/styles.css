@@ -227,9 +227,7 @@ h1 {
   z-index: 3;
 }
 
-.hud > div,
-.reset,
-.touch-controls button {
+.hud > div {
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 8px;
   background: rgba(11, 16, 35, 0.72);
@@ -258,18 +256,6 @@ h1 {
   text-align: right;
 }
 
-.reset {
-  position: absolute;
-  right: max(14px, env(safe-area-inset-right));
-  bottom: calc(98px + env(safe-area-inset-bottom));
-  width: 46px;
-  height: 46px;
-  color: #fff6d7;
-  font-size: 1.35rem;
-  cursor: pointer;
-  z-index: 4;
-}
-
 .announcement {
   position: absolute;
   left: 50%;
@@ -294,26 +280,87 @@ h1 {
   right: max(14px, env(safe-area-inset-right));
   bottom: max(14px, env(safe-area-inset-bottom));
   display: grid;
-  grid-template-columns: repeat(4, 54px);
+  grid-template-columns: minmax(70px, 96px) minmax(68px, 84px) minmax(70px, 96px) minmax(92px, 116px);
   gap: 10px;
   justify-content: space-between;
+  align-items: end;
   pointer-events: none;
   z-index: 4;
 }
 
 .touch-controls button {
-  width: 54px;
-  height: 54px;
-  color: #fff6d7;
-  font-size: 1.55rem;
-  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
+  height: 56px;
+  border: 2px solid #fff0a6;
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255, 248, 189, 0.98) 0%, rgba(255, 211, 59, 0.98) 46%, rgba(183, 116, 14, 0.98) 100%);
+  color: #fff8d4;
+  font-weight: 950;
+  text-shadow:
+    0 1px 2px rgba(80, 46, 0, 0.72),
+    0 0 8px rgba(255, 246, 176, 0.82);
+  box-shadow:
+    0 0 15px rgba(255, 213, 65, 0.84),
+    0 0 34px rgba(255, 174, 28, 0.42),
+    inset 0 2px 0 rgba(255, 255, 255, 0.62),
+    inset 0 -3px 0 rgba(105, 60, 0, 0.26);
+  cursor: pointer;
   pointer-events: auto;
   touch-action: none;
 }
 
+.move-control {
+  gap: 7px;
+  padding: 0 10px;
+}
+
+.jump-control {
+  flex-direction: column;
+  gap: 1px;
+  height: 68px;
+  padding: 12px 8px 6px;
+  clip-path: polygon(50% 0, 100% 38%, 84% 38%, 84% 100%, 16% 100%, 16% 38%, 0 38%);
+}
+
+.restart-control {
+  gap: 6px;
+  padding: 0 9px;
+}
+
+.control-icon {
+  color: #8c5e00;
+  font-size: 1.45rem;
+  line-height: 1;
+  text-shadow:
+    0 1px 0 rgba(255, 241, 150, 0.75),
+    0 0 6px rgba(96, 52, 0, 0.28);
+}
+
+.jump-control .control-icon {
+  font-size: 0.98rem;
+}
+
+.restart-control .control-icon {
+  font-size: 1rem;
+}
+
+.control-label {
+  min-width: 0;
+  color: #fff8d4;
+  font-size: 0.74rem;
+  font-weight: 950;
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+
 .touch-controls button:active {
-  transform: translateY(1px);
-  background: rgba(21, 79, 114, 0.82);
+  transform: translateY(1px) scale(0.99);
+  filter: brightness(1.08);
 }
 
 @media (max-width: 760px) {
@@ -349,12 +396,24 @@ h1 {
   }
 
   .touch-controls {
-    grid-template-columns: repeat(4, 48px);
+    grid-template-columns: minmax(64px, 78px) minmax(58px, 70px) minmax(64px, 78px) minmax(82px, 98px);
   }
 
   .touch-controls button {
-    width: 48px;
-    height: 48px;
+    height: 50px;
+  }
+
+  .jump-control {
+    height: 60px;
+    padding-top: 10px;
+  }
+
+  .control-label {
+    font-size: 0.66rem;
+  }
+
+  .control-icon {
+    font-size: 1.25rem;
   }
 }
 
@@ -434,25 +493,40 @@ h1 {
     font-size: 0.78rem;
   }
 
-  .reset {
-    right: max(8px, env(safe-area-inset-right));
-    bottom: calc(58px + env(safe-area-inset-bottom));
-    width: 36px;
-    height: 36px;
-    font-size: 1rem;
-  }
-
   .touch-controls {
     left: max(8px, env(safe-area-inset-left));
     right: max(8px, env(safe-area-inset-right));
     bottom: max(6px, env(safe-area-inset-bottom));
-    grid-template-columns: repeat(4, 40px);
+    grid-template-columns: minmax(58px, 74px) minmax(52px, 64px) minmax(58px, 74px) minmax(74px, 92px);
     gap: 8px;
   }
 
   .touch-controls button {
-    width: 40px;
-    height: 40px;
-    font-size: 1.1rem;
+    height: 38px;
+    border-width: 1px;
+    box-shadow:
+      0 0 10px rgba(255, 213, 65, 0.76),
+      0 0 22px rgba(255, 174, 28, 0.36),
+      inset 0 1px 0 rgba(255, 255, 255, 0.58),
+      inset 0 -2px 0 rgba(105, 60, 0, 0.24);
+  }
+
+  .jump-control {
+    height: 48px;
+    padding-top: 8px;
+  }
+
+  .move-control,
+  .restart-control {
+    gap: 4px;
+    padding-inline: 6px;
+  }
+
+  .control-label {
+    font-size: 0.56rem;
+  }
+
+  .control-icon {
+    font-size: 1.08rem;
   }
 }
