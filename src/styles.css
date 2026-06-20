@@ -362,9 +362,9 @@ h1 {
   position: absolute;
   left: max(14px, env(safe-area-inset-left));
   right: max(14px, env(safe-area-inset-right));
-  bottom: max(14px, env(safe-area-inset-bottom));
+  bottom: max(6px, env(safe-area-inset-bottom));
   display: grid;
-  grid-template-columns: minmax(128px, 220px) minmax(128px, 220px);
+  grid-template-columns: minmax(108px, 184px) minmax(108px, 184px);
   gap: 10px;
   justify-content: space-between;
   align-items: end;
@@ -378,7 +378,7 @@ h1 {
   justify-content: center;
   width: 100%;
   min-width: 0;
-  height: clamp(40px, 8vw, 70px);
+  height: clamp(30px, 6vw, 52px);
   padding: 0;
   border: 0;
   background: transparent;
@@ -434,11 +434,11 @@ h1 {
   }
 
   .touch-controls {
-    grid-template-columns: minmax(112px, 168px) minmax(112px, 168px);
+    grid-template-columns: minmax(96px, 142px) minmax(96px, 142px);
   }
 
   .touch-controls button {
-    height: 48px;
+    height: 36px;
   }
 
 }
@@ -558,7 +558,7 @@ h1 {
   }
 
   .touch-controls button {
-    height: 46px;
+    height: 30px;
     border-width: 1px;
     box-shadow:
       0 0 10px rgba(255, 213, 65, 0.76),
@@ -568,10 +568,10 @@ h1 {
   }
 
   .touch-controls {
-    grid-template-columns: minmax(98px, 148px) minmax(98px, 148px);
+    grid-template-columns: minmax(82px, 126px) minmax(82px, 126px);
   }
 
   .touch-controls button {
-    height: 34px;
+    height: 26px;
   }
 }

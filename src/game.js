@@ -128,7 +128,7 @@ function resize() {
   canvas.style.height = `${state.height}px`;
   ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
   const isLandscapePhone = state.width > state.height && state.height <= 540;
-  world.groundY = isLandscapePhone ? state.height - 72 : Math.max(420, state.height - 112);
+  world.groundY = isLandscapePhone ? state.height - 44 : Math.max(420, state.height - 64);
   world.slingY = world.groundY - 48;
   if (state.hero && !state.launched) {
     resetHeroToStart();
@@ -272,7 +272,7 @@ function buildLevel(force = false) {
   }
 
   state.stations.push(spriteObject("station_1", 96, world.groundY - 52, 170, 132, "launch_station"));
-  state.stations.push(spriteObject("station_2", world.width - 330, world.groundY - 74, 230, 148, "finish_station"));
+  state.stations.push(spriteObject("station_2", world.width - 135, world.groundY - 74, 230, 148, "finish_station"));
 
   const minObjectGap = Math.max(132, state.hero ? Math.max(state.hero.w, state.hero.h) + 28 : 132);
   const placedObjects = state.stations.map((station) => ({ x: station.x, y: station.y, w: station.w, h: station.h }));
@@ -356,7 +356,7 @@ function buildLevel(force = false) {
   }
 
   const monsterAssets = pickRoundMonsterAssets();
-  const monsterCount = 30 + Math.max(0, state.level - 1) * 5;
+  const monsterCount = 40 + Math.max(0, state.level - 1) * 5;
   for (let i = 0; i < monsterCount; i += 1) {
     const asset = monsterAssets[i % monsterAssets.length];
     const fireColor = ["purple", "red", "green"][(i + state.level + state.roundSeed) % 3];
