@@ -5,6 +5,7 @@ const grid = document.querySelector("#characterGrid");
 const heroName = document.querySelector("#heroName");
 const heroPower = document.querySelector("#heroPower");
 const scoreEl = document.querySelector("#score");
+const levelEl = document.querySelector("#level");
 const timerEl = document.querySelector("#timer");
 const preIntro = document.querySelector("#preIntro");
 const intro = document.querySelector("#intro");
@@ -21,9 +22,15 @@ const keys = new Set();
 const held = { left: false, right: false, jump: false, special: false };
 const pointer = { active: false, x: 0, y: 0, worldX: 0, worldY: 0 };
 const controlTaps = { left: 0, right: 0 };
+const tapMove = { active: false, x: 0 };
 
 const GAME_ASSETS = {
   fireball: "assets/game/fireball.png",
+  fireballs: {
+    purple: "assets/game/fireball_purple.png",
+    red: "assets/game/fireball_red.png",
+    green: "assets/game/fireball_green.png"
+  },
   stations: [
     "assets/game/station_1.png",
     "assets/game/station_2.png",
@@ -53,7 +60,8 @@ const GAME_ASSETS = {
     "assets/game/space_witch2.png",
     "assets/game/space_witch3.png",
     "assets/game/space_witch4.png"
-  ]
+  ],
+  monsters: Array.from({ length: 20 }, (_, index) => `assets/monsters/monster_${String(index + 1).padStart(2, "0")}.png`)
 };
 
 const state = {
@@ -73,6 +81,7 @@ const state = {
   phenomena: [],
   stations: [],
   witches: [],
+  monsters: [],
   fireballs: [],
   backgroundStars: [],
   particles: [],
@@ -81,11 +90,14 @@ const state = {
   chargeStartedAt: 0,
   chargePower: 0,
   score: 0,
+  level: 1,
+  roundSeed: 1,
+  advancingLevel: false,
   timeLeft: 120,
   won: false,
   gameOver: false,
   cooldown: 0,
-  message: "Click here to begin.",
+  message: "",
   messageTimer: 0,
   last: performance.now()
 };
@@ -132,6 +144,7 @@ function resetHeroToStart() {
   state.hero.vy = 0;
   state.hero.grounded = true;
   state.hero.facing = 1;
+  tapMove.active = false;
 }
 
 async function boot() {
@@ -154,10 +167,14 @@ async function boot() {
 async function loadGameAssets() {
   const entries = [
     ["fireball", GAME_ASSETS.fireball],
+    ["fireball_purple", GAME_ASSETS.fireballs.purple],
+    ["fireball_red", GAME_ASSETS.fireballs.red],
+    ["fireball_green", GAME_ASSETS.fireballs.green],
     ...GAME_ASSETS.stations.map((src, index) => [`station_${index + 1}`, src]),
     ...GAME_ASSETS.rocks.map((src, index) => [`rock_${index + 1}`, src]),
     ...GAME_ASSETS.phenomena.map((src, index) => [`phenomenon_${index + 1}`, src]),
-    ...GAME_ASSETS.witches.map((src, index) => [`space_witch${index + 1}`, src])
+    ...GAME_ASSETS.witches.map((src, index) => [`space_witch${index + 1}`, src]),
+    ...GAME_ASSETS.monsters.map((src, index) => [`monster_${String(index + 1).padStart(2, "0")}`, src])
   ];
   await Promise.all(
     entries.map(async ([key, src]) => {
@@ -194,6 +211,9 @@ function chooseCharacter(character) {
   state.chargeStartedAt = 0;
   state.chargePower = 0;
   state.score = 0;
+  state.level = 1;
+  state.roundSeed = Math.floor(Math.random() * 100000);
+  state.advancingLevel = false;
   state.timeLeft = 120;
   state.won = false;
   state.gameOver = false;
@@ -243,6 +263,7 @@ function buildLevel(force = false) {
   state.phenomena = [];
   state.stations = [];
   state.witches = [];
+  state.monsters = [];
   state.fireballs = [];
   state.backgroundStars = [];
 
@@ -333,6 +354,14 @@ function buildLevel(force = false) {
     const assetIndex = (i % 4) + 1;
     placeWitchObject(i, witchCount, `space_witch${assetIndex}`, placedObjects, minObjectGap);
   }
+
+  const monsterAssets = pickRoundMonsterAssets();
+  const monsterCount = 30 + Math.max(0, state.level - 1) * 5;
+  for (let i = 0; i < monsterCount; i += 1) {
+    const asset = monsterAssets[i % monsterAssets.length];
+    const fireColor = ["purple", "red", "green"][(i + state.level + state.roundSeed) % 3];
+    placeMonsterObject(i, monsterCount, asset, fireColor, placedObjects, minObjectGap);
+  }
 }
 
 function block(x, y, w, h, hp, color) {
@@ -396,6 +425,36 @@ function placeWitchObject(index, count, asset, placedObjects, minObjectGap) {
   return false;
 }
 
+function placeMonsterObject(index, count, asset, fireColor, placedObjects, minObjectGap) {
+  const startX = 1900;
+  const endX = world.width - 1600;
+  const segment = (endX - startX) / count;
+  for (let attempt = 0; attempt < 28; attempt += 1) {
+    const lane = (index * 3 + attempt) % 6;
+    const x = startX + segment * (index + 0.5) + seededRange(6100 + state.roundSeed + index * 23 + attempt, -segment * 0.24, segment * 0.24);
+    const y = world.groundY - 92 - lane * 46 + seededRange(6500 + state.roundSeed + index * 29 + attempt, -10, 22);
+    const candidate = monsterEnemy(x, y, asset, fireColor);
+    if (isObjectFarEnough(candidate, placedObjects, minObjectGap)) {
+      state.monsters.push(candidate);
+      placedObjects.push(candidate);
+      return true;
+    }
+  }
+  return false;
+}
+
+function pickRoundMonsterAssets() {
+  const count = 6 + Math.floor(seededRange(state.roundSeed + state.level * 31, 0, 8));
+  const pool = Array.from({ length: 20 }, (_, index) => `monster_${String(index + 1).padStart(2, "0")}`);
+  const picked = [];
+  for (let i = 0; i < pool.length && picked.length < count; i += 1) {
+    const index = Math.floor(seededRange(state.roundSeed + state.level * 101 + i * 37, 0, pool.length));
+    const [asset] = pool.splice(index % pool.length, 1);
+    picked.push(asset);
+  }
+  return picked.length ? picked : ["monster_01"];
+}
+
 function isObjectFarEnough(candidate, placedObjects, gap) {
   return placedObjects.every((item) => !rectsOverlap(
     candidate.x - candidate.w / 2 - gap,
@@ -413,8 +472,12 @@ function spaceWitch(x, y, asset) {
   return { asset, x, y, w: 92, h: 116, cooldown: 0.7 + Math.random() * 1.2, pulse: Math.random() * Math.PI * 2 };
 }
 
-function fireball(x, y, vx, vy) {
-  return { asset: "fireball", x, y, vx, vy, w: 40, h: 21, alive: true, spin: 0, cooldown: 0 };
+function monsterEnemy(x, y, asset, fireColor) {
+  return { asset, fireColor, x, y, w: 88, h: 86, cooldown: 0.4 + Math.random(), pulse: Math.random() * Math.PI * 2 };
+}
+
+function fireball(x, y, vx, vy, color = "purple") {
+  return { asset: `fireball_${color}`, color, x, y, vx, vy, w: 40, h: 21, alive: true, spin: 0, cooldown: 0 };
 }
 
 function target(x, y) {
@@ -493,8 +556,18 @@ function update(dt) {
       hero.vy = 0;
       announce("Game over. Tap anywhere to restart.");
     }
-    const move = (keys.has("ArrowRight") || keys.has("KeyD") || held.right ? 1 : 0) -
+    const manualMove = (keys.has("ArrowRight") || keys.has("KeyD") || held.right ? 1 : 0) -
       (keys.has("ArrowLeft") || keys.has("KeyA") || held.left ? 1 : 0);
+    let move = manualMove;
+    if (!move && tapMove.active) {
+      const dx = tapMove.x - hero.x;
+      if (Math.abs(dx) > hero.w * 0.35) {
+        move = Math.sign(dx);
+      } else {
+        tapMove.active = false;
+        hero.vx *= hero.grounded ? 0.72 : 0.9;
+      }
+    }
     const control = hero.grounded ? 1 : stats.airControl;
     hero.vx += move * stats.speed * 5.3 * control * dt;
     hero.vx = clamp(hero.vx, -900, 1260);
@@ -694,16 +767,24 @@ function updateWitches(dt) {
   if (!state.hero) return;
   for (const witch of state.witches) {
     witch.pulse += dt * 2.2;
-    witch.cooldown = Math.max(0, witch.cooldown - dt);
-    const distance = Math.abs(state.hero.x - witch.x);
-    if (witch.cooldown <= 0 && distance < 1250) {
-      const dx = state.hero.x - witch.x;
-      const dy = state.hero.y - witch.y;
-      const len = Math.max(1, Math.hypot(dx, dy));
-      const speed = 520;
-      state.fireballs.push(fireball(witch.x, witch.y - 10, (dx / len) * speed, (dy / len) * speed));
-      witch.cooldown = 1;
-    }
+    fireFromEnemy(witch, dt, "purple");
+  }
+  for (const monster of state.monsters) {
+    monster.pulse += dt * 2.5;
+    fireFromEnemy(monster, dt, monster.fireColor);
+  }
+}
+
+function fireFromEnemy(enemy, dt, color) {
+  enemy.cooldown = Math.max(0, enemy.cooldown - dt);
+  const distance = Math.abs(state.hero.x - enemy.x);
+  if (enemy.cooldown <= 0 && distance < 1250) {
+    const dx = state.hero.x - enemy.x;
+    const dy = state.hero.y - enemy.y;
+    const len = Math.max(1, Math.hypot(dx, dy));
+    const speed = 520;
+    state.fireballs.push(fireball(enemy.x, enemy.y - 10, (dx / len) * speed, (dy / len) * speed, color));
+    enemy.cooldown = 1;
   }
 }
 
@@ -733,11 +814,22 @@ function updateFireballs(dt) {
       f.h
     )) {
       f.alive = false;
-      startDamageOverTime(25, 5, "Fireball burn: 25 HP damage over 5 seconds.");
-      burst(f.x, f.y, "#ff8d35", 18);
+      const damage = getEnemyDamage(25);
+      startDamageOverTime(damage, 5, `Fireball burn: ${Math.round(damage)} HP damage over 5 seconds.`);
+      burst(f.x, f.y, getFireballColor(f.color), 18);
     }
   }
   state.fireballs = state.fireballs.filter((f) => f.alive);
+}
+
+function getEnemyDamage(baseDamage) {
+  return baseDamage * (1 + Math.max(0, state.level - 1) * 0.015);
+}
+
+function getFireballColor(color) {
+  if (color === "red") return "#ff3e26";
+  if (color === "green") return "#58ff3f";
+  return "#b862ff";
 }
 
 function damageHero(amount, message) {
@@ -820,13 +912,72 @@ function updateDamageOverTime(hero, dt) {
 
 function checkFinish(hero) {
   const finish = state.stations.find((station) => station.kind === "finish_station");
-  if (finish && rectsOverlap(hero.x - hero.w / 2, hero.y - hero.h / 2, hero.w, hero.h, finish.x - finish.w / 2, finish.y - finish.h / 2, finish.w, finish.h)) {
+  if (!state.advancingLevel && finish && rectsOverlap(hero.x - hero.w / 2, hero.y - hero.h / 2, hero.w, hero.h, finish.x - finish.w / 2, finish.y - finish.h / 2, finish.w, finish.h)) {
     state.won = true;
+    state.advancingLevel = true;
     hero.vx = 0;
     hero.vy = 0;
-    announce("Docked at the space station. Mission complete.");
+    announce(`Mission complete. Level ${state.level + 1} loading.`);
     updateHud();
+    window.setTimeout(advanceLevel, 1400);
   }
+}
+
+function advanceLevel() {
+  if (!state.selected || !state.hero || !state.advancingLevel) return;
+  state.level += 1;
+  state.roundSeed = Math.floor(Math.random() * 100000);
+  state.launched = false;
+  state.aiming = false;
+  state.won = false;
+  state.gameOver = false;
+  state.advancingLevel = false;
+  state.timeLeft = 120;
+  state.cameraX = 0;
+  state.particles = [];
+  state.fireballs = [];
+  held.left = false;
+  held.right = false;
+  held.jump = false;
+  held.special = false;
+  state.hero.hp = state.hero.maxHp;
+  state.hero.healingOverTime = 0;
+  state.hero.healingTimeLeft = 0;
+  state.hero.damageOverTime = 0;
+  state.hero.damageTimeLeft = 0;
+  state.hero.shieldTimer = 0;
+  resetHeroToStart();
+  buildLevel(true);
+  announce(`Level ${state.level}. New monsters incoming.`);
+  updateHud();
+}
+
+function restartCurrentLevel() {
+  if (!state.selected || !state.hero) return;
+  state.roundSeed = Math.floor(Math.random() * 100000);
+  state.launched = false;
+  state.aiming = false;
+  state.won = false;
+  state.gameOver = false;
+  state.advancingLevel = false;
+  state.timeLeft = 120;
+  state.cameraX = 0;
+  state.particles = [];
+  state.fireballs = [];
+  held.left = false;
+  held.right = false;
+  held.jump = false;
+  held.special = false;
+  state.hero.hp = state.hero.maxHp;
+  state.hero.healingOverTime = 0;
+  state.hero.healingTimeLeft = 0;
+  state.hero.damageOverTime = 0;
+  state.hero.damageTimeLeft = 0;
+  state.hero.shieldTimer = 0;
+  resetHeroToStart();
+  buildLevel(true);
+  announce(`Level ${state.level}. Hold Right to launch.`);
+  updateHud();
 }
 
 function useSpecial() {
@@ -909,6 +1060,7 @@ function updateHud() {
       ? "Docked"
       : `Level ${level.level} | XP ${level.current}/${level.next} | HP ${Math.round(state.hero.hp)}${shieldText}`;
   scoreEl.textContent = state.score;
+  if (levelEl) levelEl.textContent = state.level;
   if (timerEl) timerEl.textContent = formatTime(state.timeLeft);
 }
 
@@ -932,6 +1084,12 @@ function getLevelProgress(score) {
 }
 
 function announce(message) {
+  if (!state.launched && !state.gameOver && !state.won && !state.advancingLevel) {
+    state.message = "";
+    state.messageTimer = 0;
+    updateAnnouncement();
+    return;
+  }
   state.message = message;
   state.messageTimer = 3.2;
   updateAnnouncement();
@@ -939,7 +1097,9 @@ function announce(message) {
 
 function updateAnnouncement() {
   if (!announcement) return;
-  if (state.messageTimer <= 0 && state.selected && !state.won && !state.gameOver) {
+  if (!state.launched && !state.gameOver && !state.won && !state.advancingLevel) {
+    state.message = "";
+  } else if (state.messageTimer <= 0 && state.selected && !state.won && !state.gameOver) {
     state.message = "Reach the far space station. Green kits heal, shields block damage, and cosmic hazards hurt.";
   }
   announcement.textContent = state.message;
@@ -1010,6 +1170,7 @@ function drawWorld() {
   for (const s of state.stars) if (s.alive) drawStar(s.x, s.y, s.r, s.spin);
   for (const p of state.phenomena) drawPhenomenon(p);
   for (const witch of state.witches) drawWitch(witch);
+  for (const monster of state.monsters) drawMonster(monster);
   for (const f of state.fireballs) drawFireball(f);
   for (const p of state.particles) {
     ctx.globalAlpha = Math.max(0, p.life * 2);
@@ -1240,13 +1401,25 @@ function drawWitch(witch) {
   ctx.restore();
 }
 
+function drawMonster(monster) {
+  const img = state.images.get(monster.asset);
+  if (!img) return;
+  const bob = Math.sin(monster.pulse) * 4;
+  ctx.save();
+  ctx.translate(monster.x, monster.y + bob);
+  ctx.shadowColor = getFireballColor(monster.fireColor);
+  ctx.shadowBlur = 13;
+  ctx.drawImage(img, -monster.w / 2, -monster.h / 2, monster.w, monster.h);
+  ctx.restore();
+}
+
 function drawFireball(f) {
   const img = state.images.get(f.asset);
   if (!img) return;
   ctx.save();
   ctx.translate(f.x, f.y);
   ctx.rotate(Math.atan2(f.vy, f.vx));
-  ctx.shadowColor = "#ff8d35";
+  ctx.shadowColor = getFireballColor(f.color);
   ctx.shadowBlur = 18;
   ctx.drawImage(img, -f.w / 2, -f.h / 2, f.w, f.h);
   ctx.restore();
@@ -1423,7 +1596,7 @@ function drawEndState() {
     const buttonW = Math.min(360, state.width - 48);
     const buttonH = 86;
     const x = state.width / 2 - buttonW / 2;
-    const y = Math.max(98, state.height * 0.27 - buttonH / 2);
+    const y = Math.max(128, state.height * 0.46 - buttonH / 2);
     const pulse = 0.5 + Math.sin(performance.now() / 170) * 0.5;
     ctx.save();
     ctx.shadowColor = "#ffd64a";
@@ -1481,7 +1654,13 @@ canvas.addEventListener("pointerdown", (event) => {
     makeHeroJump({ allowAir: true });
     return;
   }
-  if (state.launched) return;
+  if (state.launched) {
+    tapMove.active = true;
+    tapMove.x = clamp(pointer.worldX, 20 + state.hero.w / 2, world.width - 20 - state.hero.w / 2);
+    state.hero.facing = tapMove.x >= state.hero.x ? 1 : -1;
+    announce("Moving to tapped location.");
+    return;
+  }
   pointer.active = true;
   beginLaunchCharge();
   canvas.setPointerCapture(event.pointerId);
@@ -1601,13 +1780,14 @@ function restartMission() {
   menuPanel.classList.add("is-hidden");
   menuBtn.setAttribute("aria-expanded", "false");
   if (state.selected) {
-    chooseCharacter(state.selected);
+    restartCurrentLevel();
     return;
   }
   state.launched = false;
   state.aiming = false;
   state.won = false;
   state.gameOver = false;
+  state.advancingLevel = false;
   state.timeLeft = 120;
   state.cameraX = 0;
   state.particles = [];
@@ -1629,6 +1809,7 @@ function openMainMenu() {
   state.aiming = false;
   state.won = false;
   state.gameOver = false;
+  state.advancingLevel = false;
   state.timeLeft = 120;
   state.cameraX = 0;
   state.particles = [];
