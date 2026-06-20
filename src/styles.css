@@ -145,6 +145,20 @@ canvas {
   overflow: auto;
 }
 
+.select-title {
+  margin: 0 0 18px;
+  color: #fff8d9;
+  font-size: clamp(2rem, 7vw, 4.4rem);
+  font-weight: 950;
+  line-height: 0.95;
+  text-align: center;
+  text-transform: uppercase;
+  text-shadow:
+    0 2px 2px rgba(70, 39, 0, 0.65),
+    0 0 10px rgba(255, 255, 190, 0.75),
+    0 0 24px rgba(255, 180, 35, 0.48);
+}
+
 .select__head {
   margin-bottom: 18px;
 }
@@ -221,7 +235,7 @@ h1 {
   left: max(14px, env(safe-area-inset-left));
   right: max(14px, env(safe-area-inset-right));
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   gap: 12px;
   pointer-events: none;
   z-index: 3;
@@ -253,7 +267,71 @@ h1 {
 
 .hud__score {
   min-width: 74px;
-  text-align: right;
+  text-align: center;
+}
+
+.hud__hero {
+  position: absolute;
+  left: 0;
+  max-width: min(360px, calc(50vw - 96px));
+}
+
+.hud__timer {
+  position: absolute;
+  right: 66px;
+  min-width: 76px;
+  text-align: center;
+}
+
+.top-menu {
+  position: absolute;
+  top: max(14px, env(safe-area-inset-top));
+  right: max(14px, env(safe-area-inset-right));
+  z-index: 7;
+  pointer-events: auto;
+}
+
+.menu-button,
+.menu-panel button {
+  border: 2px solid #fff0a6;
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255, 248, 189, 0.98) 0%, rgba(255, 211, 59, 0.98) 46%, rgba(183, 116, 14, 0.98) 100%);
+  color: #fff8d4;
+  font-weight: 950;
+  text-shadow:
+    0 1px 2px rgba(80, 46, 0, 0.72),
+    0 0 8px rgba(255, 246, 176, 0.82);
+  box-shadow:
+    0 0 15px rgba(255, 213, 65, 0.84),
+    0 0 34px rgba(255, 174, 28, 0.42),
+    inset 0 2px 0 rgba(255, 255, 255, 0.62),
+    inset 0 -3px 0 rgba(105, 60, 0, 0.26);
+  cursor: pointer;
+}
+
+.menu-button {
+  width: 48px;
+  height: 44px;
+  color: #8c5e00;
+  font-size: 1.35rem;
+}
+
+.menu-panel {
+  position: absolute;
+  top: 52px;
+  right: 0;
+  min-width: 128px;
+}
+
+.menu-panel.is-hidden {
+  display: none;
+}
+
+.menu-panel button {
+  width: 100%;
+  min-height: 42px;
+  font-size: 0.9rem;
 }
 
 .announcement {
@@ -280,7 +358,7 @@ h1 {
   right: max(14px, env(safe-area-inset-right));
   bottom: max(14px, env(safe-area-inset-bottom));
   display: grid;
-  grid-template-columns: minmax(70px, 96px) minmax(68px, 84px) minmax(70px, 96px) minmax(92px, 116px);
+  grid-template-columns: minmax(84px, 132px) minmax(84px, 132px);
   gap: 10px;
   justify-content: space-between;
   align-items: end;
@@ -294,65 +372,44 @@ h1 {
   justify-content: center;
   width: 100%;
   min-width: 0;
-  height: 56px;
-  border: 2px solid #fff0a6;
+  height: 68px;
+  border: 2px solid #ffd45a;
   border-radius: 8px;
   background:
-    linear-gradient(180deg, rgba(255, 248, 189, 0.98) 0%, rgba(255, 211, 59, 0.98) 46%, rgba(183, 116, 14, 0.98) 100%);
-  color: #fff8d4;
+    linear-gradient(180deg, rgba(168, 112, 18, 0.98) 0%, rgba(126, 81, 6, 0.98) 52%, rgba(82, 50, 0, 0.98) 100%);
+  color: #fff4ba;
   font-weight: 950;
   text-shadow:
-    0 1px 2px rgba(80, 46, 0, 0.72),
-    0 0 8px rgba(255, 246, 176, 0.82);
+    0 1px 2px rgba(42, 24, 0, 0.82),
+    0 0 8px rgba(255, 224, 104, 0.78);
   box-shadow:
-    0 0 15px rgba(255, 213, 65, 0.84),
-    0 0 34px rgba(255, 174, 28, 0.42),
-    inset 0 2px 0 rgba(255, 255, 255, 0.62),
-    inset 0 -3px 0 rgba(105, 60, 0, 0.26);
+    0 0 15px rgba(255, 214, 74, 0.88),
+    0 0 34px rgba(255, 183, 35, 0.5),
+    inset 0 2px 0 rgba(255, 238, 151, 0.44),
+    inset 0 -3px 0 rgba(36, 20, 0, 0.34);
   cursor: pointer;
   pointer-events: auto;
   touch-action: none;
 }
 
 .move-control {
-  gap: 7px;
-  padding: 0 10px;
-}
-
-.jump-control {
   flex-direction: column;
-  gap: 1px;
-  height: 68px;
-  padding: 12px 8px 6px;
-  clip-path: polygon(50% 0, 100% 38%, 84% 38%, 84% 100%, 16% 100%, 16% 38%, 0 38%);
+  gap: 0;
+  padding: 10px 16px 8px;
 }
 
-.restart-control {
-  gap: 6px;
-  padding: 0 9px;
+.left-control {
+  clip-path: polygon(0 50%, 38% 0, 38% 22%, 100% 22%, 100% 78%, 38% 78%, 38% 100%);
 }
 
-.control-icon {
-  color: #8c5e00;
-  font-size: 1.45rem;
-  line-height: 1;
-  text-shadow:
-    0 1px 0 rgba(255, 241, 150, 0.75),
-    0 0 6px rgba(96, 52, 0, 0.28);
-}
-
-.jump-control .control-icon {
-  font-size: 0.98rem;
-}
-
-.restart-control .control-icon {
-  font-size: 1rem;
+.right-control {
+  clip-path: polygon(100% 50%, 62% 0, 62% 22%, 0 22%, 0 78%, 62% 78%, 62% 100%);
 }
 
 .control-label {
   min-width: 0;
-  color: #fff8d4;
-  font-size: 0.74rem;
+  color: #fff4ba;
+  font-size: 0.82rem;
   font-weight: 950;
   line-height: 1;
   overflow-wrap: anywhere;
@@ -396,25 +453,17 @@ h1 {
   }
 
   .touch-controls {
-    grid-template-columns: minmax(64px, 78px) minmax(58px, 70px) minmax(64px, 78px) minmax(82px, 98px);
+    grid-template-columns: minmax(78px, 112px) minmax(78px, 112px);
   }
 
   .touch-controls button {
-    height: 50px;
-  }
-
-  .jump-control {
-    height: 60px;
-    padding-top: 10px;
+    height: 58px;
   }
 
   .control-label {
     font-size: 0.66rem;
   }
 
-  .control-icon {
-    font-size: 1.25rem;
-  }
 }
 
 @media (orientation: landscape) and (max-height: 540px) {
@@ -439,6 +488,11 @@ h1 {
   .select__panel {
     width: min(960px, 100%);
     max-height: calc(100dvh - 16px);
+  }
+
+  .select-title {
+    margin-bottom: 8px;
+    font-size: clamp(1.4rem, 5vw, 2.4rem);
   }
 
   .character-grid {
@@ -487,6 +541,31 @@ h1 {
     min-width: 54px;
   }
 
+  .hud__hero {
+    display: none;
+  }
+
+  .hud__timer {
+    right: 48px;
+    min-width: 58px;
+  }
+
+  .top-menu {
+    top: max(6px, env(safe-area-inset-top));
+    right: max(8px, env(safe-area-inset-right));
+  }
+
+  .menu-button {
+    width: 38px;
+    height: 34px;
+    font-size: 1rem;
+  }
+
+  .menu-panel {
+    top: 40px;
+    min-width: 106px;
+  }
+
   .announcement {
     top: 43%;
     width: min(440px, calc(100vw - 120px));
@@ -497,12 +576,12 @@ h1 {
     left: max(8px, env(safe-area-inset-left));
     right: max(8px, env(safe-area-inset-right));
     bottom: max(6px, env(safe-area-inset-bottom));
-    grid-template-columns: minmax(58px, 74px) minmax(52px, 64px) minmax(58px, 74px) minmax(74px, 92px);
+    grid-template-columns: minmax(70px, 104px) minmax(70px, 104px);
     gap: 8px;
   }
 
   .touch-controls button {
-    height: 38px;
+    height: 46px;
     border-width: 1px;
     box-shadow:
       0 0 10px rgba(255, 213, 65, 0.76),
@@ -511,13 +590,7 @@ h1 {
       inset 0 -2px 0 rgba(105, 60, 0, 0.24);
   }
 
-  .jump-control {
-    height: 48px;
-    padding-top: 8px;
-  }
-
-  .move-control,
-  .restart-control {
+  .move-control {
     gap: 4px;
     padding-inline: 6px;
   }
@@ -526,7 +599,4 @@ h1 {
     font-size: 0.56rem;
   }
 
-  .control-icon {
-    font-size: 1.08rem;
-  }
 }

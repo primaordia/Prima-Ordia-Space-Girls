@@ -5,16 +5,56 @@ const grid = document.querySelector("#characterGrid");
 const heroName = document.querySelector("#heroName");
 const heroPower = document.querySelector("#heroPower");
 const scoreEl = document.querySelector("#score");
+const timerEl = document.querySelector("#timer");
 const preIntro = document.querySelector("#preIntro");
 const intro = document.querySelector("#intro");
 const enterIntroBtn = document.querySelector("#enterIntroBtn");
 const startGameBtn = document.querySelector("#startGameBtn");
 const announcement = document.querySelector("#announcement");
 const music = document.querySelector("#music");
+const menuBtn = document.querySelector("#menuBtn");
+const menuPanel = document.querySelector("#menuPanel");
+const restartBtn = document.querySelector("#restartBtn");
+const mainMenuBtn = document.querySelector("#mainMenuBtn");
 
 const keys = new Set();
 const held = { left: false, right: false, jump: false, special: false };
 const pointer = { active: false, x: 0, y: 0, worldX: 0, worldY: 0 };
+const controlTaps = { left: 0, right: 0 };
+
+const GAME_ASSETS = {
+  fireball: "assets/game/fireball.png",
+  stations: [
+    "assets/game/station_1.png",
+    "assets/game/station_2.png",
+    "assets/game/station_3.png",
+    "assets/game/station_4.png",
+    "assets/game/station_5.png",
+    "assets/game/station_6.png"
+  ],
+  rocks: [
+    "assets/game/rock_1.png",
+    "assets/game/rock_2.png",
+    "assets/game/rock_3.png",
+    "assets/game/rock_4.png",
+    "assets/game/rock_5.png",
+    "assets/game/rock_6.png"
+  ],
+  phenomena: [
+    "assets/game/phenomenon_1.png",
+    "assets/game/phenomenon_2.png",
+    "assets/game/phenomenon_3.png",
+    "assets/game/phenomenon_4.png",
+    "assets/game/phenomenon_5.png",
+    "assets/game/phenomenon_6.png"
+  ],
+  witches: [
+    "assets/game/space_witch1.png",
+    "assets/game/space_witch2.png",
+    "assets/game/space_witch3.png",
+    "assets/game/space_witch4.png"
+  ]
+};
 
 const state = {
   dpr: 1,
@@ -31,6 +71,9 @@ const state = {
   stars: [],
   hazards: [],
   phenomena: [],
+  stations: [],
+  witches: [],
+  fireballs: [],
   backgroundStars: [],
   particles: [],
   launched: false,
@@ -38,6 +81,7 @@ const state = {
   chargeStartedAt: 0,
   chargePower: 0,
   score: 0,
+  timeLeft: 120,
   won: false,
   gameOver: false,
   cooldown: 0,
@@ -56,9 +100,9 @@ const world = {
   slingMaxLaunch: 5320,
   slingMaxVisibleRise: 0.88,
   launchAngleRadians: (30 * Math.PI) / 180,
-  jumpAngleRadians: (50 * Math.PI) / 180,
-  jumpBoostMultiplier: 0.675,
-  slingX: 180,
+  jumpAngleRadians: (60 * Math.PI) / 180,
+  jumpBoostMultiplier: 0.9,
+  slingX: 150,
   slingY: 0
 };
 
@@ -73,12 +117,21 @@ function resize() {
   ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
   const isLandscapePhone = state.width > state.height && state.height <= 540;
   world.groundY = isLandscapePhone ? state.height - 72 : Math.max(420, state.height - 112);
-  world.slingY = world.groundY - 132;
+  world.slingY = world.groundY - 48;
   if (state.hero && !state.launched) {
-    state.hero.x = world.slingX;
-    state.hero.y = world.slingY;
+    resetHeroToStart();
   }
-  buildLevel();
+  buildLevel(true);
+}
+
+function resetHeroToStart() {
+  if (!state.hero) return;
+  state.hero.x = world.slingX;
+  state.hero.y = world.groundY - state.hero.h / 2;
+  state.hero.vx = 0;
+  state.hero.vy = 0;
+  state.hero.grounded = true;
+  state.hero.facing = 1;
 }
 
 async function boot() {
@@ -91,10 +144,29 @@ async function boot() {
       state.images.set(character.id, image);
     })
   );
+  await loadGameAssets();
   makeCharacterGrid(data.characters);
   window.addEventListener("resize", resize);
   resize();
   requestAnimationFrame(tick);
+}
+
+async function loadGameAssets() {
+  const entries = [
+    ["fireball", GAME_ASSETS.fireball],
+    ...GAME_ASSETS.stations.map((src, index) => [`station_${index + 1}`, src]),
+    ...GAME_ASSETS.rocks.map((src, index) => [`rock_${index + 1}`, src]),
+    ...GAME_ASSETS.phenomena.map((src, index) => [`phenomenon_${index + 1}`, src]),
+    ...GAME_ASSETS.witches.map((src, index) => [`space_witch${index + 1}`, src])
+  ];
+  await Promise.all(
+    entries.map(async ([key, src]) => {
+      const image = new Image();
+      image.src = src;
+      await image.decode();
+      state.images.set(key, image);
+    })
+  );
 }
 
 function makeCharacterGrid(characters) {
@@ -122,6 +194,7 @@ function chooseCharacter(character) {
   state.chargeStartedAt = 0;
   state.chargePower = 0;
   state.score = 0;
+  state.timeLeft = 120;
   state.won = false;
   state.gameOver = false;
   state.cooldown = 0;
@@ -138,6 +211,10 @@ function chooseCharacter(character) {
     maxHp: 100,
     healingOverTime: 0,
     healingTimeLeft: 0,
+    healingPerSecond: 0,
+    damageOverTime: 0,
+    damageTimeLeft: 0,
+    damagePerSecond: 0,
     damageCooldown: 0,
     shieldTimer: 0,
     grounded: false,
@@ -148,8 +225,9 @@ function chooseCharacter(character) {
     tapJumpCooldown: 0,
     specialFlash: 0
   };
+  resetHeroToStart();
   buildLevel(true);
-  announce("Hold at the launch station, release to fire toward the space station.");
+  announce("Hold Right to charge and release, or double tap Right to launch.");
   updateHud();
   select.classList.add("is-hidden");
 }
@@ -163,38 +241,179 @@ function buildLevel(force = false) {
   state.stars = [];
   state.hazards = [];
   state.phenomena = [];
+  state.stations = [];
+  state.witches = [];
+  state.fireballs = [];
   state.backgroundStars = [];
 
   for (let i = 0; i < 900; i += 1) {
     state.backgroundStars.push(backgroundStar(i));
   }
 
-  for (let x = 820; x < world.width - 1000; x += 720) {
-    state.stars.push(star(x, world.groundY - 150 - (x % 3) * 34));
+  state.stations.push(spriteObject("station_1", 96, world.groundY - 52, 170, 132, "launch_station"));
+  state.stations.push(spriteObject("station_2", world.width - 330, world.groundY - 74, 230, 148, "finish_station"));
+
+  const minObjectGap = Math.max(132, state.hero ? Math.max(state.hero.w, state.hero.h) + 28 : 132);
+  const placedObjects = state.stations.map((station) => ({ x: station.x, y: station.y, w: station.w, h: station.h }));
+
+  for (let i = 0; i < 12; i += 1) {
+    const assetIndex = 3 + (i % 4);
+    const w = 190 + seededRange(i + 10, 0, 52);
+    const h = 112 + seededRange(i + 20, 0, 30);
+    placePlatformObject({
+      index: i,
+      count: 12,
+      asset: `station_${assetIndex}`,
+      kind: "station",
+      damageOverTime: 0,
+      w,
+      h,
+      startX: 1300,
+      endX: world.width - 1500,
+      placedObjects,
+      minObjectGap,
+      seed: 1000
+    });
   }
 
-  for (let x = 2050; x < world.width - 1400; x += 3100) {
-    state.targets.push(target(x, world.groundY - 138));
+  for (let i = 0; i < 54; i += 1) {
+    const assetIndex = (i % 6) + 1;
+    const w = 84 + seededRange(i + 100, 0, 44);
+    const h = 66 + seededRange(i + 200, 0, 34);
+    placePlatformObject({
+      index: i,
+      count: 54,
+      asset: `rock_${assetIndex}`,
+      kind: "rock",
+      damageOverTime: 0,
+      w,
+      h,
+      startX: 820,
+      endX: world.width - 880,
+      placedObjects,
+      minObjectGap,
+      seed: 2000
+    });
   }
 
-  for (let x = 1250; x < world.width - 900; x += 1350) {
-    const yOffset = 82 + ((x / 1350) % 4) * 34;
-    state.healingKits.push(healingKit(x + 420, world.groundY - yOffset));
+  for (let i = 0; i < 54; i += 1) {
+    const assetIndex = (i % 6) + 1;
+    const w = 96 + seededRange(i + 500, 0, 42);
+    const h = 84 + seededRange(i + 600, 0, 38);
+    placePlatformObject({
+      index: i,
+      count: 54,
+      asset: `phenomenon_${assetIndex}`,
+      kind: "phenomenon",
+      damageOverTime: 15,
+      w,
+      h,
+      startX: 1050,
+      endX: world.width - 1050,
+      placedObjects,
+      minObjectGap,
+      seed: 3000
+    });
   }
 
-  for (let x = 2850; x < world.width - 1600; x += 4300) {
-    const yOffset = 126 + ((x / 4300) % 2) * 58;
-    state.shields.push(shieldPickup(x + 260, world.groundY - yOffset));
-  }
+  state.blocks.forEach((b, index) => {
+    if (index % 4 === 0) {
+      state.healingKits.push(healingKit(b.x, b.y - b.h / 2 - 34));
+    } else if (index % 4 === 1) {
+      state.targets.push(target(b.x, b.y - b.h / 2 - 38));
+    } else if (index % 4 === 2) {
+      state.shields.push(shieldPickup(b.x, b.y - b.h / 2 - 42));
+    } else {
+      state.stars.push(star(b.x, b.y - b.h / 2 - 36));
+    }
+  });
 
-  for (let x = 3800; x < world.width - 1800; x += 2700) {
-    state.phenomena.push(phenomenon(x, world.groundY - 310, -245, 155, 34, 10, "meteor"));
-    state.phenomena.push(phenomenon(x + 1180, world.groundY - 460, -310, 190, 26, 10, "comet"));
+  for (let i = 0; i < 24; i += 1) {
+    const assetIndex = (i % 4) + 1;
+    placeWitchObject(i, 24, `space_witch${assetIndex}`, placedObjects, minObjectGap);
   }
 }
 
 function block(x, y, w, h, hp, color) {
   return { x, y, w, h, hp, maxHp: hp, color, alive: true, shake: 0 };
+}
+
+function spriteObject(asset, x, y, w, h, kind) {
+  return { asset, x, y, w, h, kind, pulse: Math.random() * Math.PI * 2 };
+}
+
+function platformBlock(x, y, w, h, asset, kind, damageOverTime) {
+  return {
+    asset,
+    x,
+    y,
+    w,
+    h,
+    hp: 999,
+    maxHp: 999,
+    kind,
+    damageOverTime,
+    alive: true,
+    shake: 0,
+    cooldown: 0,
+    pulse: Math.random() * Math.PI * 2
+  };
+}
+
+function placePlatformObject(config) {
+  const segment = (config.endX - config.startX) / config.count;
+  for (let attempt = 0; attempt < 18; attempt += 1) {
+    const lane = (config.index * 2 + attempt) % 6;
+    const x = config.startX + segment * (config.index + 0.5) + seededRange(config.seed + config.index * 13 + attempt, -segment * 0.28, segment * 0.28);
+    const lift = 32 + lane * 58 + seededRange(config.seed + config.index * 17 + attempt, -10, 34);
+    const y = world.groundY - config.h / 2 - lift;
+    const candidate = platformBlock(x, y, config.w, config.h, config.asset, config.kind, config.damageOverTime);
+    if (isObjectFarEnough(candidate, config.placedObjects, config.minObjectGap)) {
+      state.blocks.push(candidate);
+      config.placedObjects.push(candidate);
+      return true;
+    }
+  }
+  return false;
+}
+
+function placeWitchObject(index, count, asset, placedObjects, minObjectGap) {
+  const startX = 1550;
+  const endX = world.width - 1400;
+  const segment = (endX - startX) / count;
+  for (let attempt = 0; attempt < 16; attempt += 1) {
+    const lane = (index + attempt) % 5;
+    const x = startX + segment * (index + 0.5) + seededRange(4100 + index * 19 + attempt, -segment * 0.24, segment * 0.24);
+    const y = world.groundY - 145 - lane * 42 + seededRange(4500 + index * 23 + attempt, -12, 18);
+    const candidate = spaceWitch(x, y, asset);
+    if (isObjectFarEnough(candidate, placedObjects, minObjectGap)) {
+      state.witches.push(candidate);
+      placedObjects.push(candidate);
+      return true;
+    }
+  }
+  return false;
+}
+
+function isObjectFarEnough(candidate, placedObjects, gap) {
+  return placedObjects.every((item) => !rectsOverlap(
+    candidate.x - candidate.w / 2 - gap,
+    candidate.y - candidate.h / 2 - gap,
+    candidate.w + gap * 2,
+    candidate.h + gap * 2,
+    item.x - item.w / 2,
+    item.y - item.h / 2,
+    item.w,
+    item.h
+  ));
+}
+
+function spaceWitch(x, y, asset) {
+  return { asset, x, y, w: 92, h: 116, cooldown: 0.7 + Math.random() * 1.2, pulse: Math.random() * Math.PI * 2 };
+}
+
+function fireball(x, y, vx, vy) {
+  return { asset: "fireball", x, y, vx, vy, w: 66, h: 34, alive: true, spin: 0, cooldown: 0 };
 }
 
 function target(x, y) {
@@ -236,6 +455,10 @@ function fract(value) {
   return value - Math.floor(value);
 }
 
+function seededRange(seed, min, max) {
+  return min + fract(Math.sin(seed * 81.17 + 17.31) * 9217.41) * (max - min);
+}
+
 function tick(now) {
   const dt = Math.min(0.033, (now - state.last) / 1000);
   state.last = now;
@@ -257,19 +480,31 @@ function update(dt) {
   hero.damageCooldown = Math.max(0, hero.damageCooldown - dt);
   hero.shieldTimer = Math.max(0, hero.shieldTimer - dt);
   updateHealingOverTime(hero, dt);
+  updateDamageOverTime(hero, dt);
   hero.specialFlash = Math.max(0, hero.specialFlash - dt);
   if (state.aiming) state.chargePower = getChargeRatio();
 
   if (state.launched && !state.gameOver && !state.won) {
+    state.timeLeft = Math.max(0, state.timeLeft - dt);
+    if (state.timeLeft <= 0) {
+      state.gameOver = true;
+      hero.vx = 0;
+      hero.vy = 0;
+      announce("Game over. Tap anywhere to restart.");
+    }
     const move = (keys.has("ArrowRight") || keys.has("KeyD") || held.right ? 1 : 0) -
       (keys.has("ArrowLeft") || keys.has("KeyA") || held.left ? 1 : 0);
     const control = hero.grounded ? 1 : stats.airControl;
     hero.vx += move * stats.speed * 5.3 * control * dt;
     hero.vx = clamp(hero.vx, -900, 1260);
-    hero.facing = move ? Math.sign(move) : hero.facing;
+    if (move) {
+      hero.facing = Math.sign(move);
+    } else if (Math.abs(hero.vx) > 35) {
+      hero.facing = Math.sign(hero.vx);
+    }
 
-    if ((keys.has("Space") || keys.has("ArrowUp") || keys.has("KeyW") || held.jump) && hero.grounded) {
-      makeHeroJump();
+    if ((keys.has("Space") || keys.has("ArrowUp") || keys.has("KeyW")) && hero.grounded) {
+      makeHeroJump({ direction: hero.facing || 1 });
     }
 
     if ((keys.has("KeyE") || held.special) && state.cooldown <= 0) {
@@ -284,14 +519,16 @@ function update(dt) {
     const wasGrounded = hero.grounded;
     resolveWorld(hero);
     if (!wasGrounded && hero.grounded) hero.landingBounce = 1;
-    hitBlocks(hero);
+    hitBlocks(hero, dt);
     hitHealingFaces(hero);
     collectHealingKits(hero);
     collectShields(hero);
     collectStars(hero);
     hitHazards(hero, dt);
-    updatePhenomena(dt);
+    updateWitches(dt);
+    updateFireballs(dt);
     checkFinish(hero);
+    updateHud();
   }
 
   for (const p of state.particles) {
@@ -322,25 +559,27 @@ function resolveWorld(hero) {
   }
 }
 
-function hitBlocks(hero) {
+function hitBlocks(hero, dt) {
   for (const b of state.blocks) {
+    b.cooldown = Math.max(0, (b.cooldown || 0) - dt);
     if (!b.alive || !rectsOverlap(hero.x - hero.w / 2, hero.y - hero.h / 2, hero.w, hero.h, b.x - b.w / 2, b.y - b.h / 2, b.w, b.h)) {
       continue;
     }
-    const impact = Math.hypot(hero.vx, hero.vy) * state.selected.physics.mass;
-    if (impact > 170) {
-      damageBlock(b, impact > 460 ? 2 : 1);
-      burst(b.x, b.y, b.color, 8);
-    }
-    const dx = hero.x - b.x;
-    const dy = hero.y - b.y;
-    if (Math.abs(dx / b.w) > Math.abs(dy / b.h)) {
-      hero.x += Math.sign(dx || 1) * 18;
-      hero.vx *= -0.38;
+    const overlapX = hero.w / 2 + b.w / 2 - Math.abs(hero.x - b.x);
+    const overlapY = hero.h / 2 + b.h / 2 - Math.abs(hero.y - b.y);
+    if (overlapX < overlapY) {
+      hero.x += Math.sign(hero.x - b.x || 1) * overlapX;
+      hero.vx *= -0.18;
     } else {
-      hero.y += Math.sign(dy || -1) * 18;
-      hero.vy *= -0.32;
-      if (dy < 0) hero.grounded = true;
+      const fromAbove = hero.y < b.y;
+      hero.y += (fromAbove ? -overlapY : overlapY);
+      hero.vy = fromAbove ? Math.min(0, hero.vy) * -0.06 : Math.max(0, hero.vy) * -0.18;
+      if (fromAbove) hero.grounded = true;
+    }
+    if (b.damageOverTime && b.cooldown <= 0) {
+      startDamageOverTime(b.damageOverTime, 5, "Cosmic phenomenon: 15 HP damage over 5 seconds.");
+      b.cooldown = 1.2;
+      burst(hero.x, hero.y, "#b862ff", 14);
     }
   }
 }
@@ -450,6 +689,56 @@ function updatePhenomena(dt) {
   }
 }
 
+function updateWitches(dt) {
+  if (!state.hero) return;
+  for (const witch of state.witches) {
+    witch.pulse += dt * 2.2;
+    witch.cooldown = Math.max(0, witch.cooldown - dt);
+    const distance = Math.abs(state.hero.x - witch.x);
+    if (witch.cooldown <= 0 && distance < 1250) {
+      const dx = state.hero.x - witch.x;
+      const dy = state.hero.y - witch.y;
+      const len = Math.max(1, Math.hypot(dx, dy));
+      const speed = 520;
+      state.fireballs.push(fireball(witch.x, witch.y - 10, (dx / len) * speed, (dy / len) * speed));
+      witch.cooldown = 2;
+    }
+  }
+}
+
+function updateFireballs(dt) {
+  for (const f of state.fireballs) {
+    if (!f.alive) continue;
+    f.x += f.vx * dt;
+    f.y += f.vy * dt;
+    f.spin += dt * 6;
+    if (
+      f.x < state.cameraX - 260 ||
+      f.x > state.cameraX + state.width + 260 ||
+      f.y < -220 ||
+      f.y > world.groundY + 220
+    ) {
+      f.alive = false;
+      continue;
+    }
+    if (rectsOverlap(
+      state.hero.x - state.hero.w / 2,
+      state.hero.y - state.hero.h / 2,
+      state.hero.w,
+      state.hero.h,
+      f.x - f.w / 2,
+      f.y - f.h / 2,
+      f.w,
+      f.h
+    )) {
+      f.alive = false;
+      startDamageOverTime(25, 5, "Fireball burn: 25 HP damage over 5 seconds.");
+      burst(f.x, f.y, "#ff8d35", 18);
+    }
+  }
+  state.fireballs = state.fireballs.filter((f) => f.alive);
+}
+
 function damageHero(amount, message) {
   const hero = state.hero;
   if (!hero || hero.damageCooldown > 0 || state.gameOver || state.won) return;
@@ -468,7 +757,7 @@ function damageHero(amount, message) {
   updateHud();
   if (hero.hp <= 0) {
     state.gameOver = true;
-    announce("Hero down. Reset to try again.");
+    announce("Game over. Tap anywhere to restart.");
   }
 }
 
@@ -482,20 +771,55 @@ function startHealingOverTime(amount, seconds, message) {
   const hero = state.hero;
   hero.healingOverTime += amount;
   hero.healingTimeLeft = Math.max(hero.healingTimeLeft, seconds);
+  hero.healingPerSecond = amount / seconds;
   announce(message);
 }
 
 function updateHealingOverTime(hero, dt) {
   if (hero.healingOverTime <= 0 || hero.healingTimeLeft <= 0 || hero.hp >= hero.maxHp) return;
-  const tickHeal = Math.min(hero.healingOverTime, (10 / 5) * dt);
+  const tickHeal = Math.min(hero.healingOverTime, hero.healingPerSecond * dt);
   hero.hp = clamp(hero.hp + tickHeal, 0, hero.maxHp);
   hero.healingOverTime -= tickHeal;
   hero.healingTimeLeft = Math.max(0, hero.healingTimeLeft - dt);
   updateHud();
 }
 
+function startDamageOverTime(amount, seconds, message) {
+  const hero = state.hero;
+  if (!hero || state.gameOver || state.won) return;
+  if (hero.shieldTimer > 0) {
+    announce("Shield blocked the damage.");
+    burst(hero.x, hero.y, "#62ff8f", 12);
+    return;
+  }
+  hero.damageOverTime += amount;
+  hero.damageTimeLeft = Math.max(hero.damageTimeLeft, seconds);
+  hero.damagePerSecond = amount / seconds;
+  hero.specialFlash = Math.max(hero.specialFlash, 0.25);
+  announce(message);
+}
+
+function updateDamageOverTime(hero, dt) {
+  if (hero.damageOverTime <= 0 || hero.damageTimeLeft <= 0 || state.gameOver || state.won) return;
+  if (hero.shieldTimer > 0) {
+    hero.damageOverTime = 0;
+    hero.damageTimeLeft = 0;
+    return;
+  }
+  const tickDamage = Math.min(hero.damageOverTime, hero.damagePerSecond * dt);
+  hero.hp = clamp(hero.hp - tickDamage, 0, hero.maxHp);
+  hero.damageOverTime -= tickDamage;
+  hero.damageTimeLeft = Math.max(0, hero.damageTimeLeft - dt);
+  updateHud();
+  if (hero.hp <= 0) {
+    state.gameOver = true;
+    announce("Game over. Tap anywhere to restart.");
+  }
+}
+
 function checkFinish(hero) {
-  if (hero.x > world.width - 520) {
+  const finish = state.stations.find((station) => station.kind === "finish_station");
+  if (finish && rectsOverlap(hero.x - hero.w / 2, hero.y - hero.h / 2, hero.w, hero.h, finish.x - finish.w / 2, finish.y - finish.h / 2, finish.w, finish.h)) {
     state.won = true;
     hero.vx = 0;
     hero.vy = 0;
@@ -536,7 +860,7 @@ function useSpecial() {
 
 function makeHeroJump(options = {}) {
   if (!state.hero || !state.selected) return;
-  const { allowAir = false, airScale = 0.72 } = options;
+  const { allowAir = false, airScale = 0.82, direction = state.hero.facing || 1 } = options;
   const wasGrounded = state.hero.grounded;
   const canJump = wasGrounded || (allowAir && state.hero.tapJumpCooldown <= 0);
   if (!canJump) return;
@@ -547,7 +871,8 @@ function makeHeroJump(options = {}) {
   const boostedJumpPower = jumpPower * world.jumpBoostMultiplier;
   const forwardBoost = Math.cos(world.jumpAngleRadians) * boostedJumpPower;
   const upwardBoost = Math.sin(world.jumpAngleRadians) * boostedJumpPower;
-  state.hero.vx = clamp(state.hero.vx + state.hero.facing * forwardBoost, -1320, 1380);
+  state.hero.facing = direction >= 0 ? 1 : -1;
+  state.hero.vx = clamp(state.hero.vx + state.hero.facing * forwardBoost, -1500, 1500);
   state.hero.vy = -upwardBoost;
   state.hero.grounded = false;
   state.hero.jumpStretch = 1;
@@ -578,11 +903,19 @@ function updateHud() {
   heroName.textContent = `${state.selected.name}, ${state.selected.title}`;
   const shieldText = state.hero.shieldTimer > 0 ? ` | Shield ${state.hero.shieldTimer.toFixed(1)}s` : "";
   heroPower.textContent = state.gameOver
-    ? "Hero down"
+    ? "Game over"
     : state.won
       ? "Docked"
       : `Level ${level.level} | XP ${level.current}/${level.next} | HP ${Math.round(state.hero.hp)}${shieldText}`;
   scoreEl.textContent = state.score;
+  if (timerEl) timerEl.textContent = formatTime(state.timeLeft);
+}
+
+function formatTime(seconds) {
+  const safeSeconds = Math.max(0, Math.ceil(seconds));
+  const minutes = Math.floor(safeSeconds / 60);
+  const remainder = String(safeSeconds % 60).padStart(2, "0");
+  return `${minutes}:${remainder}`;
 }
 
 function getLevelProgress(score) {
@@ -668,13 +1001,15 @@ function drawSky() {
 function drawWorld() {
   drawPlatforms();
   drawSlingshot();
+  for (const b of state.blocks) if (b.alive) drawBlock(b);
   drawFinishStation();
-  for (const s of state.stars) if (s.alive) drawStar(s.x, s.y, s.r, s.spin);
   for (const kit of state.healingKits) if (kit.alive) drawHealingKit(kit);
   for (const shield of state.shields) if (shield.alive) drawShieldPickup(shield);
   for (const t of state.targets) if (t.alive) drawTarget(t);
+  for (const s of state.stars) if (s.alive) drawStar(s.x, s.y, s.r, s.spin);
   for (const p of state.phenomena) drawPhenomenon(p);
-  for (const b of state.blocks) if (b.alive) drawBlock(b);
+  for (const witch of state.witches) drawWitch(witch);
+  for (const f of state.fireballs) drawFireball(f);
   for (const p of state.particles) {
     ctx.globalAlpha = Math.max(0, p.life * 2);
     ctx.fillStyle = p.color;
@@ -720,14 +1055,15 @@ function drawRamp(x, y, w, h) {
 }
 
 function drawSlingshot() {
-  drawSpaceStation(world.slingX - 70, world.groundY - 116, 1, "launch");
-  for (let i = 0; i < 4; i += 1) {
-    drawShip(world.slingX - 180 - i * 64, world.groundY - 190 + (i % 2) * 44, i % 2 ? "#78e4ff" : "#ffc861");
-  }
+  const station = state.stations.find((item) => item.kind === "launch_station");
+  if (station) drawSpriteObject(station);
 }
 
 function drawFinishStation() {
-  drawSpaceStation(world.width - 430, world.groundY - 142, 1.35, "finish");
+  const station = state.stations.find((item) => item.kind === "finish_station");
+  if (!station) return;
+  drawSpriteObject(station);
+  drawCompleteMission(station);
 }
 
 function drawAim() {
@@ -793,7 +1129,7 @@ function drawHero() {
   ctx.save();
   ctx.translate(hero.x, hero.y + hero.h * 0.08 + idleBob);
   ctx.rotate((speedLean + flightLean) * hero.facing);
-  if (hero.facing < 0) ctx.scale(-1, 1);
+  ctx.scale(hero.facing < 0 ? -1 : 1, 1);
   ctx.scale(scaleX, scaleY);
   if (hero.shieldTimer > 0) {
     ctx.save();
@@ -862,6 +1198,59 @@ function drawPhenomenon(p) {
   ctx.restore();
 }
 
+function drawSpriteObject(object) {
+  const img = state.images.get(object.asset);
+  if (!img) return;
+  object.pulse = (object.pulse || 0) + 0.01;
+  ctx.save();
+  ctx.translate(object.x, object.y);
+  if (object.kind === "finish_station") {
+    ctx.shadowColor = "#62ff8f";
+    ctx.shadowBlur = 16 + Math.sin(object.pulse * 3) * 4;
+  }
+  ctx.drawImage(img, -object.w / 2, -object.h / 2, object.w, object.h);
+  ctx.restore();
+}
+
+function drawCompleteMission(station) {
+  const pulse = 0.5 + Math.sin(performance.now() / 180) * 0.5;
+  ctx.save();
+  ctx.translate(station.x, station.y - station.h / 2 - 36);
+  ctx.globalAlpha = 0.62 + pulse * 0.38;
+  ctx.fillStyle = "#7dff9b";
+  ctx.shadowColor = "#36ff70";
+  ctx.shadowBlur = 16 + pulse * 14;
+  ctx.textAlign = "center";
+  ctx.font = "950 26px system-ui";
+  ctx.fillText("Complete Mission", 0, 0);
+  ctx.textAlign = "left";
+  ctx.restore();
+}
+
+function drawWitch(witch) {
+  const img = state.images.get(witch.asset);
+  if (!img) return;
+  const bob = Math.sin(witch.pulse) * 5;
+  ctx.save();
+  ctx.translate(witch.x, witch.y + bob);
+  ctx.shadowColor = "#b862ff";
+  ctx.shadowBlur = 16;
+  ctx.drawImage(img, -witch.w / 2, -witch.h / 2, witch.w, witch.h);
+  ctx.restore();
+}
+
+function drawFireball(f) {
+  const img = state.images.get(f.asset);
+  if (!img) return;
+  ctx.save();
+  ctx.translate(f.x, f.y);
+  ctx.rotate(Math.atan2(f.vy, f.vx));
+  ctx.shadowColor = "#ff8d35";
+  ctx.shadowBlur = 18;
+  ctx.drawImage(img, -f.w / 2, -f.h / 2, f.w, f.h);
+  ctx.restore();
+}
+
 function drawSpaceStation(x, y, scale, mode) {
   ctx.save();
   ctx.translate(x, y);
@@ -903,15 +1292,23 @@ function drawShip(x, y, color) {
 function drawBlock(b) {
   b.shake = Math.max(0, b.shake - 0.02);
   const offset = b.shake ? Math.sin(performance.now() * 0.07) * 3 : 0;
+  const img = state.images.get(b.asset);
   ctx.save();
-  ctx.translate(offset, 0);
-  ctx.fillStyle = b.color;
-  ctx.fillRect(b.x - b.w / 2, b.y - b.h / 2, b.w, b.h);
-  ctx.strokeStyle = "rgba(255,255,255,0.45)";
-  ctx.lineWidth = 3;
-  ctx.strokeRect(b.x - b.w / 2, b.y - b.h / 2, b.w, b.h);
-  ctx.fillStyle = `rgba(12, 15, 31, ${0.15 + (1 - b.hp / b.maxHp) * 0.45})`;
-  ctx.fillRect(b.x - b.w / 2, b.y - b.h / 2, b.w, b.h);
+  ctx.translate(b.x + offset, b.y);
+  if (b.kind === "phenomenon") {
+    b.pulse += 0.025;
+    ctx.shadowColor = "#b862ff";
+    ctx.shadowBlur = 12 + Math.sin(b.pulse) * 5;
+  } else if (b.kind === "station") {
+    ctx.shadowColor = "#78e4ff";
+    ctx.shadowBlur = 10;
+  }
+  if (img) {
+    ctx.drawImage(img, -b.w / 2, -b.h / 2, b.w, b.h);
+  } else {
+    ctx.fillStyle = b.kind === "rock" ? "#5b6470" : "#2c4e70";
+    ctx.fillRect(-b.w / 2, -b.h / 2, b.w, b.h);
+  }
   ctx.restore();
 }
 
@@ -1020,12 +1417,39 @@ function drawStar(x, y, r, spin) {
 function drawEndState() {
   ctx.fillStyle = "rgba(5, 7, 18, 0.58)";
   ctx.fillRect(0, 0, state.width, state.height);
-  ctx.fillStyle = "#fff6d7";
   ctx.textAlign = "center";
-  ctx.font = "900 48px system-ui";
-  ctx.fillText(state.won ? "Docking Complete" : "Hero Down", state.width / 2, state.height / 2 - 16);
-  ctx.font = "700 18px system-ui";
-  ctx.fillText(state.won ? "You reached the space station" : "Reset to try again", state.width / 2, state.height / 2 + 26);
+  if (state.gameOver) {
+    const buttonW = Math.min(360, state.width - 48);
+    const buttonH = 86;
+    const x = state.width / 2 - buttonW / 2;
+    const y = state.height / 2 - buttonH / 2;
+    const pulse = 0.5 + Math.sin(performance.now() / 170) * 0.5;
+    ctx.save();
+    ctx.shadowColor = "#ffd64a";
+    ctx.shadowBlur = 18 + pulse * 10;
+    ctx.fillStyle = "#7a4d00";
+    ctx.strokeStyle = "#ffd45a";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.roundRect(x, y, buttonW, buttonH, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#fff4ba";
+    ctx.textAlign = "center";
+    ctx.font = "950 38px system-ui";
+    ctx.fillText("GAME OVER", state.width / 2, y + 53);
+    ctx.restore();
+
+    ctx.fillStyle = "#fff4ba";
+    ctx.font = "800 17px system-ui";
+    ctx.fillText("Tap anywhere to restart", state.width / 2, y + buttonH + 34);
+  } else {
+    ctx.fillStyle = "#fff6d7";
+    ctx.font = "900 48px system-ui";
+    ctx.fillText("Docking Complete", state.width / 2, state.height / 2 - 16);
+    ctx.font = "700 18px system-ui";
+    ctx.fillText("You reached the space station", state.width / 2, state.height / 2 + 26);
+  }
   ctx.textAlign = "left";
 }
 
@@ -1047,6 +1471,10 @@ function screenToWorld(event) {
 
 canvas.addEventListener("pointerdown", (event) => {
   if (!state.hero) return;
+  if (state.gameOver) {
+    restartMission();
+    return;
+  }
   screenToWorld(event);
   if (state.launched && isPointerOnHero()) {
     makeHeroJump({ allowAir: true });
@@ -1054,11 +1482,7 @@ canvas.addEventListener("pointerdown", (event) => {
   }
   if (state.launched) return;
   pointer.active = true;
-  state.aiming = true;
-  state.chargeStartedAt = performance.now();
-  state.chargePower = 0;
-  state.hero.x = world.slingX;
-  state.hero.y = world.slingY;
+  beginLaunchCharge();
   canvas.setPointerCapture(event.pointerId);
 });
 
@@ -1071,20 +1495,41 @@ canvas.addEventListener("pointerup", releaseLaunch);
 canvas.addEventListener("pointercancel", releaseLaunch);
 
 function releaseLaunch() {
-  if (!pointer.active || !state.hero) return;
+  if (!state.hero || !state.aiming) return;
   pointer.active = false;
   state.aiming = false;
   const charge = getChargeRatio();
+  if (charge < 0.08) {
+    state.chargeStartedAt = 0;
+    state.chargePower = 0;
+    return;
+  }
+  launchHero(charge);
+}
+
+function beginLaunchCharge() {
+  if (!state.hero || state.launched || state.gameOver || state.won) return;
+  state.aiming = true;
+  state.chargeStartedAt = performance.now();
+  state.chargePower = 0;
+  resetHeroToStart();
+}
+
+function launchHero(charge = 0.75, angle = world.launchAngleRadians) {
+  if (!state.hero || state.launched || state.gameOver || state.won) return;
   const launch = state.selected.movement.launchPower;
   const requestedSpeed = world.slingMinLaunch + charge * (world.slingMaxLaunch - world.slingMinLaunch);
   const visibleVerticalLimit = Math.max(620, state.height * world.slingMaxVisibleRise);
-  const visibleSpeedLimit = visibleVerticalLimit / (Math.sin(world.launchAngleRadians) * launch);
+  const visibleSpeedLimit = visibleVerticalLimit / (Math.sin(angle) * launch);
   const speed = Math.min(requestedSpeed, visibleSpeedLimit);
-  state.hero.vx = Math.cos(world.launchAngleRadians) * speed * launch;
-  state.hero.vy = -Math.sin(world.launchAngleRadians) * speed * launch;
+  state.hero.vx = Math.cos(angle) * speed * launch;
+  state.hero.vy = -Math.sin(angle) * speed * launch;
+  state.hero.facing = 1;
   state.launched = true;
+  state.aiming = false;
   state.chargePower = 0;
-  burst(world.slingX, world.slingY, "#ffc861", 10 + Math.round(charge * 16));
+  state.chargeStartedAt = 0;
+  burst(state.hero.x, state.hero.y, "#ffc861", 10 + Math.round(charge * 16));
 }
 
 function getChargeRatio() {
@@ -1114,15 +1559,33 @@ window.addEventListener("keydown", (event) => {
 
 window.addEventListener("keyup", (event) => keys.delete(event.code));
 
-function bindHold(id, prop) {
+function bindMoveButton(id, prop, direction) {
   const button = document.querySelector(id);
   const on = (event) => {
     event.preventDefault();
     held[prop] = true;
+    const now = performance.now();
+    const tappedTwice = now - controlTaps[prop] < 320;
+    controlTaps[prop] = now;
+    if (!state.hero) return;
+    if (state.gameOver) {
+      restartMission();
+      return;
+    }
+    if (!state.launched) {
+      if (direction > 0 && tappedTwice) {
+        launchHero(0.72);
+        return;
+      }
+      if (direction > 0) beginLaunchCharge();
+      return;
+    }
+    makeHeroJump({ allowAir: true, direction });
   };
   const off = (event) => {
     event.preventDefault();
     held[prop] = false;
+    if (prop === "right" && state.aiming && !state.launched) releaseLaunch();
   };
   button.addEventListener("pointerdown", on);
   button.addEventListener("pointerup", off);
@@ -1130,24 +1593,62 @@ function bindHold(id, prop) {
   button.addEventListener("pointerleave", off);
 }
 
-bindHold("#leftBtn", "left");
-bindHold("#rightBtn", "right");
-bindHold("#jumpBtn", "jump");
+bindMoveButton("#leftBtn", "left", -1);
+bindMoveButton("#rightBtn", "right", 1);
 
-document.querySelector("#backBtn").addEventListener("click", () => {
+function restartMission() {
+  menuPanel.classList.add("is-hidden");
+  menuBtn.setAttribute("aria-expanded", "false");
+  if (state.selected) {
+    chooseCharacter(state.selected);
+    return;
+  }
   state.launched = false;
   state.aiming = false;
   state.won = false;
   state.gameOver = false;
+  state.timeLeft = 120;
   state.cameraX = 0;
   state.particles = [];
+  state.fireballs = [];
   held.left = false;
   held.right = false;
   held.jump = false;
   held.special = false;
+  if (state.hero) resetHeroToStart();
   select.classList.remove("is-hidden");
   announce("Choose your hero.");
+  updateHud();
+}
+
+function openMainMenu() {
+  menuPanel.classList.add("is-hidden");
+  menuBtn.setAttribute("aria-expanded", "false");
+  state.launched = false;
+  state.aiming = false;
+  state.won = false;
+  state.gameOver = false;
+  state.timeLeft = 120;
+  state.cameraX = 0;
+  state.particles = [];
+  state.fireballs = [];
+  held.left = false;
+  held.right = false;
+  held.jump = false;
+  held.special = false;
+  if (state.hero) resetHeroToStart();
+  select.classList.remove("is-hidden");
+  announce("Choose your hero.");
+  updateHud();
+}
+
+menuBtn.addEventListener("click", () => {
+  const isHidden = menuPanel.classList.toggle("is-hidden");
+  menuBtn.setAttribute("aria-expanded", String(!isHidden));
 });
+
+restartBtn.addEventListener("click", restartMission);
+mainMenuBtn.addEventListener("click", openMainMenu);
 
 enterIntroBtn.addEventListener("click", () => {
   preIntro.classList.add("is-hidden");

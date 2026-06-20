@@ -22,39 +22,42 @@
 
       <section id="select" class="select" aria-label="Choose character">
         <div class="select__panel">
+          <h1 class="select-title">Choose Your Hero</h1>
           <div id="characterGrid" class="character-grid"></div>
         </div>
       </section>
 
       <section class="hud" aria-label="Game status">
-        <div>
+        <div class="hud__hero">
           <span id="heroName">Choose a hero</span>
-          <small id="heroPower">Pull the slingshot to launch</small>
+          <small id="heroPower">Hold Right to launch</small>
         </div>
         <div class="hud__score">
           <span id="score">0</span>
           <small>score</small>
         </div>
+        <div class="hud__timer">
+          <span id="timer">2:00</span>
+          <small>timer</small>
+        </div>
       </section>
 
-      <div id="announcement" class="announcement" role="status">Click and hold at the launch station to charge.</div>
+      <div class="top-menu">
+        <button id="menuBtn" class="menu-button" type="button" aria-label="Open menu" aria-expanded="false">☰</button>
+        <div id="menuPanel" class="menu-panel is-hidden">
+          <button id="restartBtn" type="button">Restart</button>
+          <button id="mainMenuBtn" type="button">Main Menu</button>
+        </div>
+      </div>
+
+      <div id="announcement" class="announcement" role="status">Hold Right to charge and release to launch.</div>
 
       <nav class="touch-controls" aria-label="Touch controls">
-        <button id="leftBtn" class="move-control" type="button" aria-label="Move left">
-          <span class="control-icon">‹</span>
+        <button id="leftBtn" class="move-control left-control" type="button" aria-label="Move left">
           <span class="control-label">Left</span>
         </button>
-        <button id="jumpBtn" class="jump-control" type="button" aria-label="Jump">
-          <span class="control-icon">▲</span>
-          <span class="control-label">Jump</span>
-        </button>
-        <button id="rightBtn" class="move-control" type="button" aria-label="Move right">
+        <button id="rightBtn" class="move-control right-control" type="button" aria-label="Move right">
           <span class="control-label">Right</span>
-          <span class="control-icon">›</span>
-        </button>
-        <button id="backBtn" class="restart-control" type="button" aria-label="Restart and choose character">
-          <span class="control-icon">☰</span>
-          <span class="control-label">Restart</span>
         </button>
       </nav>
 
