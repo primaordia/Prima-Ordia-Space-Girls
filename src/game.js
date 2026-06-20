@@ -22,7 +22,7 @@ const keys = new Set();
 const held = { left: false, right: false, jump: false, special: false };
 const pointer = { active: false, x: 0, y: 0, worldX: 0, worldY: 0 };
 const controlTaps = { left: 0, right: 0 };
-const tapMove = { active: false, x: 0 };
+const tapMove = { active: false, x: 0, y: 0 };
 
 const GAME_ASSETS = {
   fireball: "assets/game/fireball.png",
@@ -356,7 +356,7 @@ function buildLevel(force = false) {
   }
 
   const monsterAssets = pickRoundMonsterAssets();
-  const monsterCount = 40 + Math.max(0, state.level - 1) * 5;
+  const monsterCount = 43 + Math.max(0, state.level - 1) * 2;
   for (let i = 0; i < monsterCount; i += 1) {
     const asset = monsterAssets[i % monsterAssets.length];
     const fireColor = ["purple", "red", "green"][(i + state.level + state.roundSeed) % 3];
@@ -784,7 +784,7 @@ function fireFromEnemy(enemy, dt, color) {
     const len = Math.max(1, Math.hypot(dx, dy));
     const speed = 520;
     state.fireballs.push(fireball(enemy.x, enemy.y - 10, (dx / len) * speed, (dy / len) * speed, color));
-    enemy.cooldown = 1;
+    enemy.cooldown = 0.5;
   }
 }
 
@@ -1033,6 +1033,27 @@ function makeHeroJump(options = {}) {
   burst(state.hero.x, state.hero.y + state.hero.h / 2, "#fff1a8", wasGrounded ? 8 : 12);
 }
 
+function moveHeroTowardPointer() {
+  if (!state.hero) return;
+  const hero = state.hero;
+  const targetX = clamp(pointer.worldX, 20 + hero.w / 2, world.width - 20 - hero.w / 2);
+  const targetY = clamp(pointer.worldY, 20, world.groundY);
+  const direction = targetX >= hero.x ? 1 : -1;
+  const horizontalDistance = Math.abs(targetX - hero.x);
+  const targetIsHigher = targetY < hero.y - hero.h * 0.22;
+  const shouldLeap = targetIsHigher || horizontalDistance > hero.w * 1.2;
+
+  tapMove.active = true;
+  tapMove.x = targetX;
+  tapMove.y = targetY;
+  hero.facing = direction;
+
+  if (shouldLeap) {
+    makeHeroJump({ allowAir: true, direction });
+  }
+  announce("Moving to tapped location.");
+}
+
 function burst(x, y, color, count) {
   for (let i = 0; i < count; i += 1) {
     const a = Math.random() * Math.PI * 2;
@@ -1084,12 +1105,6 @@ function getLevelProgress(score) {
 }
 
 function announce(message) {
-  if (!state.launched && !state.gameOver && !state.won && !state.advancingLevel) {
-    state.message = "";
-    state.messageTimer = 0;
-    updateAnnouncement();
-    return;
-  }
   state.message = message;
   state.messageTimer = 3.2;
   updateAnnouncement();
@@ -1097,7 +1112,7 @@ function announce(message) {
 
 function updateAnnouncement() {
   if (!announcement) return;
-  if (!state.launched && !state.gameOver && !state.won && !state.advancingLevel) {
+  if (!state.selected) {
     state.message = "";
   } else if (state.messageTimer <= 0 && state.selected && !state.won && !state.gameOver) {
     state.message = "Reach the far space station. Green kits heal, shields block damage, and cosmic hazards hurt.";
@@ -1655,10 +1670,7 @@ canvas.addEventListener("pointerdown", (event) => {
     return;
   }
   if (state.launched) {
-    tapMove.active = true;
-    tapMove.x = clamp(pointer.worldX, 20 + state.hero.w / 2, world.width - 20 - state.hero.w / 2);
-    state.hero.facing = tapMove.x >= state.hero.x ? 1 : -1;
-    announce("Moving to tapped location.");
+    moveHeroTowardPointer();
     return;
   }
   pointer.active = true;
