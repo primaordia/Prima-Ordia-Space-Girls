@@ -344,21 +344,21 @@ function buildLevel(force = false) {
       state.healingKits.push(healingKit(b.x, b.y - b.h / 2 - 34));
     } else if (index % 4 === 1) {
       state.targets.push(target(b.x, b.y - b.h / 2 - 38));
-    } else if (index % 4 === 2) {
+    } else if (index % 4 === 2 && index % 16 !== 14) {
       state.shields.push(shieldPickup(b.x, b.y - b.h / 2 - 42));
     } else {
       state.stars.push(star(b.x, b.y - b.h / 2 - 36));
     }
   });
 
-  const witchCount = 72;
+  const witchCount = 74;
   for (let i = 0; i < witchCount; i += 1) {
     const assetIndex = (i % 4) + 1;
     placeWitchObject(i, witchCount, `space_witch${assetIndex}`, placedObjects, minObjectGap);
   }
 
   const monsterAssets = pickRoundMonsterAssets();
-  const monsterCount = 43 + Math.max(0, state.level - 1) * 2;
+  const monsterCount = 45 + Math.max(0, state.level - 1) * 2;
   for (let i = 0; i < monsterCount; i += 1) {
     const asset = monsterAssets[i % monsterAssets.length];
     const fireColor = ["purple", "red", "green"][(i + state.level + state.roundSeed) % 3];
