@@ -358,7 +358,7 @@ h1 {
   right: max(14px, env(safe-area-inset-right));
   bottom: max(14px, env(safe-area-inset-bottom));
   display: grid;
-  grid-template-columns: minmax(84px, 132px) minmax(84px, 132px);
+  grid-template-columns: minmax(128px, 220px) minmax(128px, 220px);
   gap: 10px;
   justify-content: space-between;
   align-items: end;
@@ -372,52 +372,27 @@ h1 {
   justify-content: center;
   width: 100%;
   min-width: 0;
-  height: 68px;
-  border: 2px solid #ffd45a;
-  border-radius: 8px;
-  background:
-    linear-gradient(180deg, rgba(168, 112, 18, 0.98) 0%, rgba(126, 81, 6, 0.98) 52%, rgba(82, 50, 0, 0.98) 100%);
-  color: #fff4ba;
-  font-weight: 950;
-  text-shadow:
-    0 1px 2px rgba(42, 24, 0, 0.82),
-    0 0 8px rgba(255, 224, 104, 0.78);
-  box-shadow:
-    0 0 15px rgba(255, 214, 74, 0.88),
-    0 0 34px rgba(255, 183, 35, 0.5),
-    inset 0 2px 0 rgba(255, 238, 151, 0.44),
-    inset 0 -3px 0 rgba(36, 20, 0, 0.34);
+  height: clamp(58px, 12vw, 104px);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  filter: drop-shadow(0 0 12px rgba(255, 214, 74, 0.72)) drop-shadow(0 0 28px rgba(255, 183, 35, 0.32));
   cursor: pointer;
   pointer-events: auto;
   touch-action: none;
 }
 
-.move-control {
-  flex-direction: column;
-  gap: 0;
-  padding: 10px 16px 8px;
-}
-
-.left-control {
-  clip-path: polygon(0 50%, 38% 0, 38% 22%, 100% 22%, 100% 78%, 38% 78%, 38% 100%);
-}
-
-.right-control {
-  clip-path: polygon(100% 50%, 62% 0, 62% 22%, 0 22%, 0 78%, 62% 78%, 62% 100%);
-}
-
-.control-label {
-  min-width: 0;
-  color: #fff4ba;
-  font-size: 0.82rem;
-  font-weight: 950;
-  line-height: 1;
-  overflow-wrap: anywhere;
+.touch-controls img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
 }
 
 .touch-controls button:active {
-  transform: translateY(1px) scale(0.99);
-  filter: brightness(1.08);
+  transform: translateY(1px) scale(0.985);
+  filter: drop-shadow(0 0 14px rgba(255, 214, 74, 0.86)) brightness(1.08);
 }
 
 @media (max-width: 760px) {
@@ -453,15 +428,11 @@ h1 {
   }
 
   .touch-controls {
-    grid-template-columns: minmax(78px, 112px) minmax(78px, 112px);
+    grid-template-columns: minmax(112px, 168px) minmax(112px, 168px);
   }
 
   .touch-controls button {
-    height: 58px;
-  }
-
-  .control-label {
-    font-size: 0.66rem;
+    height: 64px;
   }
 
 }
@@ -590,13 +561,11 @@ h1 {
       inset 0 -2px 0 rgba(105, 60, 0, 0.24);
   }
 
-  .move-control {
-    gap: 4px;
-    padding-inline: 6px;
+  .touch-controls {
+    grid-template-columns: minmax(98px, 148px) minmax(98px, 148px);
   }
 
-  .control-label {
-    font-size: 0.56rem;
+  .touch-controls button {
+    height: 50px;
   }
-
 }

@@ -328,9 +328,10 @@ function buildLevel(force = false) {
     }
   });
 
-  for (let i = 0; i < 24; i += 1) {
+  const witchCount = 72;
+  for (let i = 0; i < witchCount; i += 1) {
     const assetIndex = (i % 4) + 1;
-    placeWitchObject(i, 24, `space_witch${assetIndex}`, placedObjects, minObjectGap);
+    placeWitchObject(i, witchCount, `space_witch${assetIndex}`, placedObjects, minObjectGap);
   }
 }
 
@@ -381,7 +382,7 @@ function placeWitchObject(index, count, asset, placedObjects, minObjectGap) {
   const startX = 1550;
   const endX = world.width - 1400;
   const segment = (endX - startX) / count;
-  for (let attempt = 0; attempt < 16; attempt += 1) {
+  for (let attempt = 0; attempt < 36; attempt += 1) {
     const lane = (index + attempt) % 5;
     const x = startX + segment * (index + 0.5) + seededRange(4100 + index * 19 + attempt, -segment * 0.24, segment * 0.24);
     const y = world.groundY - 145 - lane * 42 + seededRange(4500 + index * 23 + attempt, -12, 18);
@@ -413,7 +414,7 @@ function spaceWitch(x, y, asset) {
 }
 
 function fireball(x, y, vx, vy) {
-  return { asset: "fireball", x, y, vx, vy, w: 66, h: 34, alive: true, spin: 0, cooldown: 0 };
+  return { asset: "fireball", x, y, vx, vy, w: 40, h: 21, alive: true, spin: 0, cooldown: 0 };
 }
 
 function target(x, y) {
@@ -701,7 +702,7 @@ function updateWitches(dt) {
       const len = Math.max(1, Math.hypot(dx, dy));
       const speed = 520;
       state.fireballs.push(fireball(witch.x, witch.y - 10, (dx / len) * speed, (dy / len) * speed));
-      witch.cooldown = 2;
+      witch.cooldown = 1;
     }
   }
 }
@@ -1422,7 +1423,7 @@ function drawEndState() {
     const buttonW = Math.min(360, state.width - 48);
     const buttonH = 86;
     const x = state.width / 2 - buttonW / 2;
-    const y = state.height / 2 - buttonH / 2;
+    const y = Math.max(98, state.height * 0.27 - buttonH / 2);
     const pulse = 0.5 + Math.sin(performance.now() / 170) * 0.5;
     ctx.save();
     ctx.shadowColor = "#ffd64a";
