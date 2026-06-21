@@ -15,6 +15,7 @@ const announcement = document.querySelector("#announcement");
 const music = document.querySelector("#music");
 const menuBtn = document.querySelector("#menuBtn");
 const menuPanel = document.querySelector("#menuPanel");
+const pauseBtn = document.querySelector("#pauseBtn");
 const restartBtn = document.querySelector("#restartBtn");
 const mainMenuBtn = document.querySelector("#mainMenuBtn");
 
@@ -23,6 +24,16 @@ const held = { left: false, right: false, jump: false, special: false };
 const pointer = { active: false, x: 0, y: 0, worldX: 0, worldY: 0 };
 const controlTaps = { left: 0, right: 0 };
 const tapMove = { active: false, x: 0, y: 0 };
+const soundState = { ctx: null, enabled: false, lastFireball: 0 };
+
+const NPC_LINES = [
+  "What are you doing?",
+  "Hurry up!",
+  "OMG I want to go shopping",
+  "This is taking forever",
+  "Over here!",
+  "You got this!"
+];
 
 const GAME_ASSETS = {
   fireball: "assets/game/fireball.png",
@@ -83,6 +94,7 @@ const state = {
   stations: [],
   witches: [],
   monsters: [],
+  npcs: [],
   fireballs: [],
   backgroundStars: [],
   particles: [],
@@ -97,6 +109,7 @@ const state = {
   timeLeft: 120,
   won: false,
   gameOver: false,
+  paused: false,
   cooldown: 0,
   message: "",
   messageTimer: 0,
@@ -219,6 +232,7 @@ function chooseCharacter(character) {
   state.timeLeft = 120;
   state.won = false;
   state.gameOver = false;
+  state.paused = false;
   state.cooldown = 0;
   state.cameraX = 0;
   state.particles = [];
@@ -266,6 +280,7 @@ function buildLevel(force = false) {
   state.stations = [];
   state.witches = [];
   state.monsters = [];
+  state.npcs = [];
   state.fireballs = [];
   state.backgroundStars = [];
 
@@ -351,6 +366,8 @@ function buildLevel(force = false) {
     }
   });
 
+  createNpcEncounters(placedObjects, minObjectGap);
+
   const witchCount = 74;
   for (let i = 0; i < witchCount; i += 1) {
     const assetIndex = (i % 4) + 1;
@@ -364,6 +381,40 @@ function buildLevel(force = false) {
     const fireColor = ["purple", "red", "green"][(i + state.level + state.roundSeed) % 3];
     placeMonsterObject(i, monsterCount, asset, fireColor, placedObjects, minObjectGap);
   }
+}
+
+function createNpcEncounters(placedObjects, minObjectGap) {
+  if (!state.selected) return;
+  const characters = (window.PRIMA_CHARACTERS || []).filter((character) => character.id !== state.selected.id);
+  const count = characters.length;
+  if (!count) return;
+  const startX = 2200;
+  const endX = world.width - 2300;
+  const segment = (endX - startX) / count;
+  characters.forEach((character, index) => {
+    const w = Math.max(52, character.physics.width * 0.86);
+    const h = Math.max(70, character.physics.height * 0.86);
+    for (let attempt = 0; attempt < 24; attempt += 1) {
+      const x = startX + segment * (index + 0.5) + seededRange(7200 + state.roundSeed + index * 43 + attempt, -segment * 0.26, segment * 0.26);
+      const y = world.groundY - h / 2;
+      const candidate = {
+        character,
+        x,
+        y,
+        w,
+        h,
+        line: NPC_LINES[(index + state.roundSeed) % NPC_LINES.length],
+        progress: 0,
+        claimed: false,
+        pulse: seededRange(7600 + index, 0, Math.PI * 2)
+      };
+      if (isObjectFarEnough(candidate, placedObjects, minObjectGap * 0.72)) {
+        state.npcs.push(candidate);
+        placedObjects.push(candidate);
+        return;
+      }
+    }
+  });
 }
 
 function block(x, y, w, h, hp, color) {
@@ -545,6 +596,11 @@ function update(dt) {
   hero.tapJumpCooldown = Math.max(0, hero.tapJumpCooldown - dt);
   hero.damageCooldown = Math.max(0, hero.damageCooldown - dt);
   hero.shieldTimer = Math.max(0, hero.shieldTimer - dt);
+  if (state.paused) {
+    state.cameraX += (clamp(hero.x - state.width * 0.38, 0, world.width - state.width) - state.cameraX) * 0.08;
+    updateAnnouncement();
+    return;
+  }
   updateHealingOverTime(hero, dt);
   updateDamageOverTime(hero, dt);
   hero.specialFlash = Math.max(0, hero.specialFlash - dt);
@@ -600,6 +656,7 @@ function update(dt) {
     collectHealingKits(hero);
     collectShields(hero);
     collectStars(hero);
+    updateNpcs(hero, dt);
     hitHazards(hero, dt);
     updateWitches(dt);
     updateFireballs(dt);
@@ -616,6 +673,28 @@ function update(dt) {
   state.particles = state.particles.filter((p) => p.life > 0);
   state.cameraX += (clamp(hero.x - state.width * 0.38, 0, world.width - state.width) - state.cameraX) * 0.08;
   updateAnnouncement();
+}
+
+function updateNpcs(hero, dt) {
+  for (const npc of state.npcs) {
+    npc.pulse += dt * 3;
+    if (npc.claimed) continue;
+    const nearX = Math.abs(hero.x - npc.x) < Math.max(112, hero.w * 1.25);
+    const nearY = Math.abs(hero.y - npc.y) < Math.max(126, hero.h * 1.2);
+    if (nearX && nearY) {
+      npc.progress = Math.min(3, npc.progress + dt);
+      if (npc.progress >= 3) {
+        npc.claimed = true;
+        state.score += 500;
+        playSound("bonus");
+        announce(`${npc.character.name} joined in: +500 score.`);
+        burst(npc.x, npc.y - npc.h * 0.35, "#ffd84f", 30);
+        updateHud();
+      }
+    } else {
+      npc.progress = Math.max(0, npc.progress - dt * 0.9);
+    }
+  }
 }
 
 function resolveWorld(hero) {
@@ -690,6 +769,7 @@ function collectHealingKits(hero) {
       kit.alive = false;
       startHealingOverTime(10, 5, "Medikit healing: 10 HP over 5 seconds.");
       state.score += 35;
+      playSound("medikit");
       burst(kit.x, kit.y, "#62ff8f", 18);
       updateHud();
     }
@@ -704,6 +784,7 @@ function collectShields(hero) {
       shield.alive = false;
       hero.shieldTimer = 5;
       hero.specialFlash = Math.max(hero.specialFlash, 0.45);
+      playSound("shield");
       announce("Shield active: damage blocked for 5 seconds.");
       burst(shield.x, shield.y, "#62ff8f", 22);
       updateHud();
@@ -786,6 +867,7 @@ function fireFromEnemy(enemy, dt, color) {
     const len = Math.max(1, Math.hypot(dx, dy));
     const speed = 520;
     state.fireballs.push(fireball(enemy.x, enemy.y - 10, (dx / len) * speed, (dy / len) * speed, color));
+    playSound("fireball");
     enemy.cooldown = 0.5;
   }
 }
@@ -841,12 +923,14 @@ function damageHero(amount, message) {
     hero.damageCooldown = 0.25;
     hero.specialFlash = Math.max(hero.specialFlash, 0.25);
     announce("Shield blocked the damage.");
+    playSound("shield");
     burst(hero.x, hero.y, "#62ff8f", 12);
     return;
   }
   hero.hp = clamp(hero.hp - amount, 0, hero.maxHp);
   hero.damageCooldown = 0.55;
   hero.specialFlash = 0.35;
+  playSound("ouch");
   announce(message);
   burst(hero.x, hero.y, "#ff4d5d", 16);
   updateHud();
@@ -884,6 +968,7 @@ function startDamageOverTime(amount, seconds, message) {
   if (!hero || state.gameOver || state.won) return;
   if (hero.shieldTimer > 0) {
     announce("Shield blocked the damage.");
+    playSound("shield");
     burst(hero.x, hero.y, "#62ff8f", 12);
     return;
   }
@@ -891,6 +976,7 @@ function startDamageOverTime(amount, seconds, message) {
   hero.damageTimeLeft = Math.max(hero.damageTimeLeft, seconds);
   hero.damagePerSecond = amount / seconds;
   hero.specialFlash = Math.max(hero.specialFlash, 0.25);
+  playSound("ouch");
   announce(message);
 }
 
@@ -933,6 +1019,7 @@ function advanceLevel() {
   state.aiming = false;
   state.won = false;
   state.gameOver = false;
+  state.paused = false;
   state.advancingLevel = false;
   state.timeLeft = 120;
   state.cameraX = 0;
@@ -961,6 +1048,7 @@ function restartCurrentLevel() {
   state.aiming = false;
   state.won = false;
   state.gameOver = false;
+  state.paused = false;
   state.advancingLevel = false;
   state.timeLeft = 120;
   state.cameraX = 0;
@@ -1116,6 +1204,8 @@ function updateAnnouncement() {
   if (!announcement) return;
   if (!state.selected) {
     state.message = "";
+  } else if (state.paused) {
+    state.message = "Paused.";
   } else if (state.messageTimer <= 0 && state.selected && !state.won && !state.gameOver) {
     state.message = "Reach the far space station. Green kits heal, shields block damage, and cosmic hazards hurt.";
   }
@@ -1124,10 +1214,80 @@ function updateAnnouncement() {
 
 function startMusic() {
   if (!music) return;
+  ensureSound();
   music.volume = 0.45;
   music.play().catch(() => {
     announce("Tap start to enable music.");
   });
+}
+
+function ensureSound() {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return null;
+  if (!soundState.ctx) soundState.ctx = new AudioContextClass();
+  if (soundState.ctx.state === "suspended") soundState.ctx.resume();
+  soundState.enabled = true;
+  return soundState.ctx;
+}
+
+function playTone({ frequency = 440, endFrequency = frequency, duration = 0.14, type = "sine", gain = 0.045, delay = 0 }) {
+  const audio = ensureSound();
+  if (!audio || !soundState.enabled) return;
+  const now = audio.currentTime + delay;
+  const osc = audio.createOscillator();
+  const volume = audio.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(frequency, now);
+  osc.frequency.exponentialRampToValueAtTime(Math.max(20, endFrequency), now + duration);
+  volume.gain.setValueAtTime(0.0001, now);
+  volume.gain.exponentialRampToValueAtTime(gain, now + 0.012);
+  volume.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+  osc.connect(volume).connect(audio.destination);
+  osc.start(now);
+  osc.stop(now + duration + 0.02);
+}
+
+function playSound(name) {
+  if (!ensureSound()) return;
+  if (name === "fireball") {
+    const now = performance.now();
+    if (now - soundState.lastFireball < 170) return;
+    soundState.lastFireball = now;
+    playTone({ frequency: 360, endFrequency: 92, duration: 0.18, type: "sawtooth", gain: 0.028 });
+  } else if (name === "ouch") {
+    playTone({ frequency: 190, endFrequency: 78, duration: 0.18, type: "square", gain: 0.052 });
+    playTone({ frequency: 120, endFrequency: 62, duration: 0.16, type: "triangle", gain: 0.03, delay: 0.03 });
+  } else if (name === "shield") {
+    playTone({ frequency: 420, endFrequency: 760, duration: 0.18, type: "sine", gain: 0.045 });
+    playTone({ frequency: 760, endFrequency: 1120, duration: 0.16, type: "sine", gain: 0.035, delay: 0.08 });
+  } else if (name === "medikit") {
+    playTone({ frequency: 520, endFrequency: 760, duration: 0.13, type: "triangle", gain: 0.04 });
+    playTone({ frequency: 780, endFrequency: 980, duration: 0.14, type: "triangle", gain: 0.036, delay: 0.11 });
+  } else if (name === "bonus") {
+    playTone({ frequency: 660, endFrequency: 880, duration: 0.11, type: "sine", gain: 0.04 });
+    playTone({ frequency: 880, endFrequency: 1320, duration: 0.18, type: "sine", gain: 0.04, delay: 0.1 });
+  }
+}
+
+function setPaused(paused) {
+  if (!state.selected || state.gameOver || state.won) return;
+  state.paused = paused;
+  if (pauseBtn) pauseBtn.textContent = paused ? "Resume" : "Pause";
+  if (paused) {
+    held.left = false;
+    held.right = false;
+    held.jump = false;
+    held.special = false;
+    pointer.active = false;
+    state.aiming = false;
+    announce("Paused.");
+  } else {
+    announce("Resumed.");
+  }
+}
+
+function togglePause() {
+  setPaused(!state.paused);
 }
 
 function draw() {
@@ -1140,6 +1300,7 @@ function draw() {
   drawHero();
   ctx.restore();
   if (state.won || state.gameOver) drawEndState();
+  if (state.paused) drawPauseOverlay();
 }
 
 function drawSky() {
@@ -1186,6 +1347,7 @@ function drawWorld() {
   for (const t of state.targets) if (t.alive) drawTarget(t);
   for (const s of state.stars) if (s.alive) drawStar(s.x, s.y, s.r, s.spin);
   for (const p of state.phenomena) drawPhenomenon(p);
+  for (const npc of state.npcs) drawNpc(npc);
   for (const witch of state.witches) drawWitch(witch);
   for (const monster of state.monsters) drawMonster(monster);
   for (const f of state.fireballs) drawFireball(f);
@@ -1305,10 +1467,26 @@ function drawHero() {
   ctx.fill();
   ctx.restore();
 
+  if (state.launched && Math.abs(hero.vx) > 210) {
+    ctx.save();
+    const trailDirection = hero.vx > 0 ? -1 : 1;
+    ctx.strokeStyle = "rgba(255, 216, 79, 0.34)";
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+    for (let i = 0; i < 3; i += 1) {
+      const y = hero.y + (i - 1) * hero.h * 0.16;
+      ctx.beginPath();
+      ctx.moveTo(hero.x + trailDirection * (hero.w * 0.34 + i * 8), y);
+      ctx.lineTo(hero.x + trailDirection * (hero.w * 0.9 + i * 18), y + Math.sin(hero.animTime * 9 + i) * 4);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   ctx.save();
   ctx.translate(hero.x, hero.y + hero.h * 0.08 + idleBob);
   ctx.rotate((speedLean + flightLean) * hero.facing);
-  ctx.scale(hero.facing < 0 ? -1 : 1, 1);
+  ctx.scale(hero.facing * (state.selected.assetFacing || 1) < 0 ? -1 : 1, 1);
   ctx.scale(scaleX, scaleY);
   if (hero.shieldTimer > 0) {
     ctx.save();
@@ -1571,6 +1749,50 @@ function drawShieldPickup(shield) {
   ctx.restore();
 }
 
+function drawNpc(npc) {
+  const img = state.images.get(npc.character.id);
+  if (!img) return;
+  const bob = Math.sin(npc.pulse) * 3;
+  const facesRight = !state.hero || state.hero.x >= npc.x;
+  const assetFacing = npc.character.assetFacing || 1;
+  ctx.save();
+  ctx.translate(npc.x, npc.y + bob);
+  ctx.scale((facesRight ? 1 : -1) * assetFacing < 0 ? -1 : 1, 1);
+  ctx.shadowColor = npc.claimed ? "#ffd84f" : "#78e4ff";
+  ctx.shadowBlur = npc.claimed ? 16 : 10;
+  ctx.drawImage(img, -npc.w / 2, -npc.h / 2, npc.w, npc.h);
+  ctx.restore();
+
+  const bubbleText = npc.claimed ? "+500!" : npc.line;
+  const bubbleW = Math.min(190, Math.max(96, bubbleText.length * 7.6 + 26));
+  const bubbleH = 34;
+  const bubbleX = npc.x - bubbleW / 2;
+  const bubbleY = npc.y - npc.h / 2 - 56;
+  ctx.save();
+  ctx.fillStyle = npc.claimed ? "rgba(110, 76, 0, 0.88)" : "rgba(9, 13, 31, 0.84)";
+  ctx.strokeStyle = npc.claimed ? "#ffd84f" : "rgba(255, 255, 255, 0.56)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.roundRect(bubbleX, bubbleY, bubbleW, bubbleH, 8);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = npc.claimed ? "#fff2a8" : "#fff6d7";
+  ctx.font = "800 13px system-ui";
+  ctx.textAlign = "center";
+  ctx.fillText(bubbleText, npc.x, bubbleY + 22);
+  if (!npc.claimed && npc.progress > 0) {
+    const barW = bubbleW - 18;
+    const barY = bubbleY + bubbleH + 7;
+    ctx.fillStyle = "rgba(5, 7, 18, 0.78)";
+    ctx.fillRect(npc.x - barW / 2, barY, barW, 7);
+    ctx.fillStyle = "#ffd84f";
+    ctx.fillRect(npc.x - barW / 2, barY, barW * (npc.progress / 3), 7);
+    ctx.strokeStyle = "rgba(255, 246, 215, 0.58)";
+    ctx.strokeRect(npc.x - barW / 2, barY, barW, 7);
+  }
+  ctx.restore();
+}
+
 function drawStar(x, y, r, spin) {
   ctx.save();
   ctx.translate(x, y);
@@ -1626,6 +1848,32 @@ function drawEndState() {
   ctx.textAlign = "left";
 }
 
+function drawPauseOverlay() {
+  ctx.save();
+  ctx.fillStyle = "rgba(5, 7, 18, 0.48)";
+  ctx.fillRect(0, 0, state.width, state.height);
+  const panelW = Math.min(330, state.width - 44);
+  const panelH = 118;
+  const x = state.width / 2 - panelW / 2;
+  const y = state.height / 2 - panelH / 2;
+  ctx.shadowColor = "#ffd64a";
+  ctx.shadowBlur = 18;
+  ctx.fillStyle = "rgba(80, 52, 0, 0.88)";
+  ctx.strokeStyle = "#ffd45a";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.roundRect(x, y, panelW, panelH, 8);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "#fff4ba";
+  ctx.textAlign = "center";
+  ctx.font = "950 38px system-ui";
+  ctx.fillText("PAUSED", state.width / 2, y + 58);
+  ctx.font = "800 15px system-ui";
+  ctx.fillText("Open the menu to resume", state.width / 2, y + 86);
+  ctx.restore();
+}
+
 function rectsOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
   return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
 }
@@ -1643,11 +1891,13 @@ function screenToWorld(event) {
 }
 
 canvas.addEventListener("pointerdown", (event) => {
+  ensureSound();
   if (!state.hero) return;
   if (state.gameOver) {
     restartMission();
     return;
   }
+  if (state.paused) return;
   screenToWorld(event);
   if (state.launched && isPointerOnHero()) {
     makeHeroJump({ allowAir: true });
@@ -1731,6 +1981,7 @@ function isPointerOnHero() {
 window.addEventListener("keydown", (event) => {
   keys.add(event.code);
   if (event.code === "Escape") select.classList.remove("is-hidden");
+  if (event.code === "KeyP") togglePause();
 });
 
 window.addEventListener("keyup", (event) => keys.delete(event.code));
@@ -1739,6 +1990,7 @@ function bindMoveButton(id, prop, direction) {
   const button = document.querySelector(id);
   const on = (event) => {
     event.preventDefault();
+    ensureSound();
     held[prop] = true;
     const now = performance.now();
     const tappedTwice = now - controlTaps[prop] < 320;
@@ -1748,6 +2000,7 @@ function bindMoveButton(id, prop, direction) {
       restartMission();
       return;
     }
+    if (state.paused) return;
     if (!state.launched) {
       if (direction > 0 && tappedTwice) {
         launchHero(0.72);
@@ -1783,6 +2036,7 @@ function restartMission() {
   state.aiming = false;
   state.won = false;
   state.gameOver = false;
+  state.paused = false;
   state.advancingLevel = false;
   state.timeLeft = 120;
   state.cameraX = 0;
@@ -1805,6 +2059,7 @@ function openMainMenu() {
   state.aiming = false;
   state.won = false;
   state.gameOver = false;
+  state.paused = false;
   state.advancingLevel = false;
   state.timeLeft = 120;
   state.cameraX = 0;
@@ -1827,13 +2082,16 @@ menuBtn.addEventListener("click", () => {
 
 restartBtn.addEventListener("click", restartMission);
 mainMenuBtn.addEventListener("click", openMainMenu);
+pauseBtn.addEventListener("click", togglePause);
 
-enterIntroBtn.addEventListener("click", () => {
-  preIntro.classList.add("is-hidden");
-  intro.classList.remove("is-hidden");
-  startMusic();
-  announce("Welcome to Prima Ordia.");
-});
+if (enterIntroBtn && preIntro) {
+  enterIntroBtn.addEventListener("click", () => {
+    preIntro.classList.add("is-hidden");
+    intro.classList.remove("is-hidden");
+    startMusic();
+    announce("Welcome to Fantasy Space Girls.");
+  });
+}
 
 startGameBtn.addEventListener("click", () => {
   intro.classList.add("is-hidden");

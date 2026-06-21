@@ -5,6 +5,7 @@ window.PRIMA_CHARACTERS = [
     title: "Star Fairy",
     asset: "assets/characters/leela-star-fairy.png",
     role: "support_glider",
+    assetFacing: -1,
     movement: { speed: 235, jump: 760, airControl: 0.82, launchPower: 0.9 },
     physics: { body: "capsule", width: 56, height: 86, mass: 0.82, bounce: 0.18 }
   },
@@ -14,6 +15,7 @@ window.PRIMA_CHARACTERS = [
     title: "Space Paladin",
     asset: "assets/characters/frank-space-paladin.png",
     role: "heavy_breaker",
+    assetFacing: 1,
     movement: { speed: 175, jump: 680, airControl: 0.45, launchPower: 1.22 },
     physics: { body: "capsule", width: 72, height: 104, mass: 1.55, bounce: 0.08 }
   },
@@ -23,6 +25,7 @@ window.PRIMA_CHARACTERS = [
     title: "Berry Phoenix",
     asset: "assets/characters/feenix-berry-phoenix.png",
     role: "aerial_scout",
+    assetFacing: 1,
     movement: { speed: 255, jump: 720, airControl: 0.95, launchPower: 1 },
     physics: { body: "circle", width: 70, height: 76, mass: 0.72, bounce: 0.32 }
   },
@@ -32,6 +35,7 @@ window.PRIMA_CHARACTERS = [
     title: "Void Ranger",
     asset: "assets/characters/poliana-void-ranger.png",
     role: "precision_trickster",
+    assetFacing: 1,
     movement: { speed: 250, jump: 745, airControl: 0.88, launchPower: 0.96 },
     physics: { body: "capsule", width: 52, height: 82, mass: 0.86, bounce: 0.22 }
   },
@@ -41,6 +45,7 @@ window.PRIMA_CHARACTERS = [
     title: "Nebula Angel",
     asset: "assets/characters/rocky-roxana-nebula-angel.png",
     role: "speed_balancer",
+    assetFacing: 1,
     movement: { speed: 285, jump: 740, airControl: 0.78, launchPower: 1.04 },
     physics: { body: "capsule", width: 56, height: 88, mass: 0.94, bounce: 0.24 }
   },
@@ -50,6 +55,7 @@ window.PRIMA_CHARACTERS = [
     title: "Cosmos Adventurer",
     asset: "assets/characters/anna-banana-cosmos-adventurer.png",
     role: "agile_collector",
+    assetFacing: 1,
     movement: { speed: 300, jump: 755, airControl: 0.84, launchPower: 0.98 },
     physics: { body: "capsule", width: 54, height: 90, mass: 0.9, bounce: 0.2 }
   }

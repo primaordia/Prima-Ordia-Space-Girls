@@ -1,0 +1,17 @@
+.DS_Store
+node_modules/
+dist/
+build/
+.env
+.env.*
+*.log
+Prima Ordia Space Girls/
+
+android/.gradle/
+android/app/build/
+android/build/
+android/capacitor-cordova-android-plugins/build/
+android/debug.keystore
+android/local.properties
+android/signing.properties
+android/keystores/

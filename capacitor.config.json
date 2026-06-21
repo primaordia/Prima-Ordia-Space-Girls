@@ -1,0 +1,14 @@
+{
+  "appId": "com.primaordia.spacegirls",
+  "appName": "Fantasy Space Girls",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchAutoHide": true,
+      "backgroundColor": "#050714"
+    }
+  }
+}

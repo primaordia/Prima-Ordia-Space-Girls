@@ -3,20 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Prima Ordia Prototype</title>
+    <meta name="theme-color" content="#f6c645" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Fantasy Space Girls" />
+    <title>Fantasy Space Girls</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="assets/icons/icon-180.png" />
     <link rel="stylesheet" href="src/styles.css" />
   </head>
   <body>
     <main id="app">
-      <canvas id="game" aria-label="Prima Ordia playable prototype"></canvas>
+      <canvas id="game" aria-label="Fantasy Space Girls playable game"></canvas>
 
-      <section id="preIntro" class="pre-intro" aria-label="Open intro">
-        <div class="starfield"></div>
-        <button id="enterIntroBtn" class="enter-box" type="button">CLICK HERE</button>
-      </section>
-
-      <section id="intro" class="intro is-hidden" aria-label="Intro">
-        <img src="assets/source_references/primaspacegirls.png" alt="Prima Ordia Fantasy Space Girls" />
+      <section id="intro" class="intro" aria-label="Intro">
+        <img src="assets/source_references/primaspacegirls.png" alt="Fantasy Space Girls" />
         <button id="startGameBtn" class="start-game" type="button">START GAME</button>
       </section>
 
@@ -49,6 +50,7 @@
       <div class="top-menu">
         <button id="menuBtn" class="menu-button" type="button" aria-label="Open menu" aria-expanded="false">☰</button>
         <div id="menuPanel" class="menu-panel is-hidden">
+          <button id="pauseBtn" type="button">Pause</button>
           <button id="restartBtn" type="button">Restart</button>
           <button id="mainMenuBtn" type="button">Main Menu</button>
         </div>
@@ -69,5 +71,10 @@
     </main>
     <script src="src/characters.js"></script>
     <script src="src/game.js"></script>
+    <script>
+      if ("serviceWorker" in navigator && location.protocol !== "file:") {
+        navigator.serviceWorker.register("service-worker.js");
+      }
+    </script>
   </body>
 </html>
