@@ -391,9 +391,11 @@ function createNpcEncounters(placedObjects, minObjectGap) {
   const startX = 2200;
   const endX = world.width - 2300;
   const segment = (endX - startX) / count;
+  const heroW = state.hero?.w || state.selected.physics.width;
+  const heroH = state.hero?.h || state.selected.physics.height;
   characters.forEach((character, index) => {
-    const w = Math.max(52, character.physics.width * 0.86);
-    const h = Math.max(70, character.physics.height * 0.86);
+    const w = heroW;
+    const h = heroH;
     for (let attempt = 0; attempt < 24; attempt += 1) {
       const x = startX + segment * (index + 0.5) + seededRange(7200 + state.roundSeed + index * 43 + attempt, -segment * 0.26, segment * 0.26);
       const y = world.groundY - h / 2;
@@ -699,6 +701,11 @@ function updateNpcs(hero, dt) {
 
 function resolveWorld(hero) {
   hero.grounded = false;
+  const ceilingY = getHeroCeilingY(hero);
+  if (hero.y < ceilingY) {
+    hero.y = ceilingY;
+    hero.vy = Math.max(0, hero.vy) * 0.18;
+  }
   if (hero.y + hero.h / 2 >= world.groundY) {
     hero.y = world.groundY - hero.h / 2;
     hero.vy = Math.min(0, hero.vy) * -0.12;
@@ -712,6 +719,10 @@ function resolveWorld(hero) {
     hero.x = world.width - 20 - hero.w / 2;
     hero.vx *= -0.2;
   }
+}
+
+function getHeroCeilingY(hero) {
+  return 8 + hero.h / 2;
 }
 
 function hitBlocks(hero, dt) {
@@ -1127,20 +1138,13 @@ function moveHeroTowardPointer() {
   if (!state.hero) return;
   const hero = state.hero;
   const targetX = clamp(pointer.worldX, 20 + hero.w / 2, world.width - 20 - hero.w / 2);
-  const targetY = clamp(pointer.worldY, 20, world.groundY);
+  const targetY = clamp(pointer.worldY, getHeroCeilingY(hero), world.groundY);
   const direction = targetX >= hero.x ? 1 : -1;
-  const horizontalDistance = Math.abs(targetX - hero.x);
-  const targetIsHigher = targetY < hero.y - hero.h * 0.22;
-  const shouldLeap = targetIsHigher || horizontalDistance > hero.w * 1.2;
 
   tapMove.active = true;
   tapMove.x = targetX;
   tapMove.y = targetY;
   hero.facing = direction;
-
-  if (shouldLeap) {
-    makeHeroJump({ allowAir: true, direction });
-  }
   announce("Moving to tapped location.");
 }
 
@@ -1467,22 +1471,6 @@ function drawHero() {
   ctx.fill();
   ctx.restore();
 
-  if (state.launched && Math.abs(hero.vx) > 210) {
-    ctx.save();
-    const trailDirection = hero.vx > 0 ? -1 : 1;
-    ctx.strokeStyle = "rgba(255, 216, 79, 0.34)";
-    ctx.lineWidth = 3;
-    ctx.lineCap = "round";
-    for (let i = 0; i < 3; i += 1) {
-      const y = hero.y + (i - 1) * hero.h * 0.16;
-      ctx.beginPath();
-      ctx.moveTo(hero.x + trailDirection * (hero.w * 0.34 + i * 8), y);
-      ctx.lineTo(hero.x + trailDirection * (hero.w * 0.9 + i * 18), y + Math.sin(hero.animTime * 9 + i) * 4);
-      ctx.stroke();
-    }
-    ctx.restore();
-  }
-
   ctx.save();
   ctx.translate(hero.x, hero.y + hero.h * 0.08 + idleBob);
   ctx.rotate((speedLean + flightLean) * hero.facing);
@@ -1505,6 +1493,7 @@ function drawHero() {
     ctx.shadowBlur = 22 + hero.specialFlash * 22;
   }
   ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
+  drawHeadBubble(drawW, drawH);
 
   if (hero.specialFlash > 0) {
     ctx.globalAlpha = hero.specialFlash * 0.35;
@@ -1516,6 +1505,29 @@ function drawHero() {
   }
   ctx.restore();
   drawHealthBar(hero);
+}
+
+function drawHeadBubble(drawW, drawH) {
+  const radius = Math.max(18, Math.min(drawW, drawH) * 0.22);
+  const centerY = -drawH * 0.31;
+  ctx.save();
+  ctx.fillStyle = "rgba(190, 242, 255, 0.13)";
+  ctx.strokeStyle = "rgba(230, 252, 255, 0.72)";
+  ctx.lineWidth = 2.5;
+  ctx.shadowColor = "rgba(120, 228, 255, 0.55)";
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  ctx.arc(0, centerY, radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.globalAlpha = 0.62;
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.88)";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(-radius * 0.22, centerY - radius * 0.22, radius * 0.48, Math.PI * 1.08, Math.PI * 1.62);
+  ctx.stroke();
+  ctx.restore();
 }
 
 function drawHealthBar(hero) {
@@ -1752,6 +1764,9 @@ function drawShieldPickup(shield) {
 function drawNpc(npc) {
   const img = state.images.get(npc.character.id);
   if (!img) return;
+  const ratio = img.width / img.height;
+  const drawH = npc.h * 1.22;
+  const drawW = drawH * ratio;
   const bob = Math.sin(npc.pulse) * 3;
   const facesRight = !state.hero || state.hero.x >= npc.x;
   const assetFacing = npc.character.assetFacing || 1;
@@ -1760,7 +1775,8 @@ function drawNpc(npc) {
   ctx.scale((facesRight ? 1 : -1) * assetFacing < 0 ? -1 : 1, 1);
   ctx.shadowColor = npc.claimed ? "#ffd84f" : "#78e4ff";
   ctx.shadowBlur = npc.claimed ? 16 : 10;
-  ctx.drawImage(img, -npc.w / 2, -npc.h / 2, npc.w, npc.h);
+  ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
+  drawHeadBubble(drawW, drawH);
   ctx.restore();
 
   const bubbleText = npc.claimed ? "+500!" : npc.line;
@@ -1899,10 +1915,6 @@ canvas.addEventListener("pointerdown", (event) => {
   }
   if (state.paused) return;
   screenToWorld(event);
-  if (state.launched && isPointerOnHero()) {
-    makeHeroJump({ allowAir: true });
-    return;
-  }
   if (state.launched) {
     moveHeroTowardPointer();
     return;
@@ -1961,21 +1973,6 @@ function launchHero(charge = 0.75, angle = world.launchAngleRadians) {
 function getChargeRatio() {
   if (!state.chargeStartedAt) return 0;
   return clamp((performance.now() - state.chargeStartedAt) / world.chargeTimeMs, 0, 1);
-}
-
-function isPointerOnHero() {
-  const hero = state.hero;
-  const tapPadding = 34;
-  return rectsOverlap(
-    pointer.worldX,
-    pointer.worldY,
-    1,
-    1,
-    hero.x - hero.w / 2 - tapPadding,
-    hero.y - hero.h / 2 - tapPadding,
-    hero.w + tapPadding * 2,
-    hero.h + tapPadding * 2
-  );
 }
 
 window.addEventListener("keydown", (event) => {
